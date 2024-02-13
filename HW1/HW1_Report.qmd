@@ -1,6 +1,6 @@
 ---
 title: "Homework 1"
-author: "YOUR NAME HERE"
+author: "Kelsey Hawkins:
 format: pdf
 ---
 
