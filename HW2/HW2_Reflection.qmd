@@ -1,0 +1,23 @@
+---
+title: "Homework 2"
+author: "Kelsey Hawkins"
+format: pdf
+---
+
+
+# Introduction
+An introduction should introduce the problem and data you're working on, give some background and relevant detail for the reader, and explain why it is important.
+
+# Analysis 
+Any exploratory analysis of your data, and general summarization of the data (e.g. summary statistics, correlation heatmaps, graphs, information about the data...). Tell the reader about the types of variables you have and some general information about them, Plots and/or Tables are always great. This should also include any cleaning and joining you did.
+If you want a table you can make one with this website and paste the markdown table here. For example:
+
+# Methods
+Explain the structure of your model and your approach to building it. This can also include changes you made to your model in the process of building it. Someone should be able to read your methods section and generally be able to tell exactly what architechture you used. However REMEMBER that this should be geared towards an audience who might not understand Keras code.
+
+# Results
+Detailed discussion of how your model performed. Include a discussion about whether or not Deep Learning was necessary in this situation.
+
+# Reflection
+In this assignment, I did not come across any struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
+
