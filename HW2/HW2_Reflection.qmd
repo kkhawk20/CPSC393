@@ -11,11 +11,12 @@ ASL is a prominent language in the American deaf community. With this in mind, I
 # Analysis 
 Any exploratory analysis of your data, and general summarization of the data (e.g. summary statistics, correlation heatmaps, graphs, information about the data...). Tell the reader about the types of variables you have and some general information about them, Plots and/or Tables are always great. This should also include any cleaning and joining you did.
 
-'''{python}
+```{python}
 import pandas as pd
-df = pd.Dataframe({"A":[1,2]})
+df = pd.DataFrame({"A": [1,2]})
 print(df)
-'''
+```
+
 
 # Methods
 Explain the structure of your model and your approach to building it. This can also include changes you made to your model in the process of building it. Someone should be able to read your methods section and generally be able to tell exactly what architechture you used. However REMEMBER that this should be geared towards an audience who might not understand Keras code.
