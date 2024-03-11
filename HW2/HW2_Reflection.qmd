@@ -347,5 +347,4 @@ plt.show()
 ```
 
 # Reflection
-In this assignment, I did not come across many struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
-
+In this assignment, I did not come across many struggles or problems with the code or analysis. It was very interesting to look into the architecture and math behind the models to prove why the neural network did horribly compared to the random forest classifier. I think this assignment was great to prove that you don't always need deep learning architectures with your models, and sometimes simple models work best. 
