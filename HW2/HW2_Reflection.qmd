@@ -90,9 +90,7 @@ The first model I created is a Deep Feed-Forward Neural Network. I started with 
 The second model I created is a Random Forest Classifier. I created a simple one to get a general sense of the model outputs and comparison to the DNN. Then, I built a tuned RFC by utilizing the Randomized Search CV module. The parameters I tuned were the number of estimators, max depth, min samples split and leaf. The scorers were a combination of accuracy and F1 for a combination between all three classification metrics. 
 
 # Results
-Detailed discussion of how your model performed. Include a discussion about whether or not Deep Learning was necessary in this situation.
-
-With my two models, it is proven that deep learning is not needed. In the deep neural network, no matter how many layers I added or removed, or tuning I did, the metrics did not significantly improve. Both the accuracy and F1 scores were extremely low and the model failed to fit to the data well. Especially since I could not use convolutional layers, the neural network failed to find features well. 
+With my two models, it is proven that deep learning is not needed. In the deep neural network, no matter how many layers I added or removed, or tuning I did, the metrics did not significantly improve. Both the accuracy and F1 scores were extremely low and the model failed to fit to the data well. Especially since I could not use convolutional layers, the neural network failed to find features well. The training and testing scores were not far from eachother, so no underfitting or overfitting was present. However, the testing accuracy was 34%, and the F1 score was also 34%. 
 
 ```{python}
 #| label: Model_output_DNN_graph
@@ -163,25 +161,6 @@ plt.legend(['Train', 'Test'], loc='upper left')
 
 plt.show()
 
-train_pred = model.predict(trainX)
-train_pred_labels = np.argmax(train_pred, axis=1)
-
-# Calculate accuracy for the training set
-acc_train = accuracy_score(y_train, train_pred_labels)
-f1_train = f1_score(y_train, train_pred_labels, average = 'micro')
-
-# For the testing set, do the prediction and then calculate accuracy
-test_pred = model.predict(testX)
-test_pred_labels = np.argmax(test_pred, axis=1)
-acc_test = accuracy_score(y_test, test_pred_labels)
-f1_test = f1_score(y_test, test_pred_labels, average = 'micro')
-
-print(f"Training accuracy: {acc_train:.4f}")
-print(f"Training F1: {f1_train:.4f}")
-print(f"Testing accuracy: {acc_test:.4f}")
-print(f"Testing F1: {f1_test:.4f}")
-
-
 ```
 
 
@@ -248,8 +227,125 @@ plt.show()
 
 ```
 
-In the random forest classifier model, the metrics were quite different than the DNN. This further proves deep learning is not necessary in this context as the comparison of scores were multitudes different. The random forest classifier outputted very high metrics once it was tuned, 
+In the random forest classifier model, the metrics were quite different than the DNN. This further proves deep learning is not necessary in this context as the comparison of scores were multitudes different. The random forest classifier outputted very high metrics once it was tuned. The tuner found the best number of estimators to be 300, the min samples split of 2, and min samples leaf to be 1 and max depth of 20. The training and testing accuracy showed signs of overfitting as the training accuracy was 100% and the testing accuracy was 83%. In the images below, we can see the predictions were valid for all five images, as opposed to the predictions made by the DNN. 
 
+```{python}
+#| label: Model_output_RFC_Images
+#| fig-cap: "RFC Predictions over Test Images"
+#| echo : false
+
+import warnings
+warnings.filterwarnings('ignore')
+import yaml
+
+import numpy as np
+import pandas as pd
+
+from keras.datasets import mnist
+import keras as kb
+
+from sklearn.preprocessing import LabelBinarizer
+
+from plotnine import *
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import make_scorer, accuracy_score, f1_score
+
+# A more complex RFC with randomizedSearchCV for parameter tuning! 
+# This took 20 minutes on a GPU
+
+# Assuming trainY might be one-hot encoded, convert if necessary:
+if len(trainY.shape) > 1:  # trainY is one-hot encoded
+    y_train_labels = np.argmax(trainY, axis=1)
+else:
+    y_train_labels = trainY  # trainY is already in label format
+
+# parameter distributions to search
+param_distributions = {
+    'n_estimators': [100, 200, 300],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4]
+}
+
+# Initialize the classifier
+rf = RandomForestClassifier(random_state=123)
+
+# scorers for model performance
+scorers = {
+    'accuracy_score': make_scorer(accuracy_score),
+    'f1_score': make_scorer(f1_score, average='micro')
+}
+
+# Setup RandomizedSearchCV
+random_search = RandomizedSearchCV(estimator=rf, param_distributions=param_distributions, n_iter=10, scoring=scorers,
+                                    refit='f1_score', return_train_score=True, cv=2, verbose=1, random_state=123)
+
+# Fit the random search to the data
+random_search.fit(trainX, y_train_labels)
+
+# Best parameters and scores
+print("Best parameters found: ", random_search.best_params_)
+best_rf = random_search.best_estimator_
+
+# Predict on the test data
+test_preds = best_rf.predict(testX)
+train_preds = best_rf.predict(trainX)
+
+# testY might be one-hot encoded, convert if necessary:
+if len(testY.shape) > 1:  # testY is one-hot encoded
+    y_test_labels = np.argmax(testY, axis=1)
+else:
+    y_test_labels = testY  # testY is already in label format
+
+# # Evaluate the best model
+# accuracy_test = accuracy_score(y_test_labels, test_preds)
+# f1_score_test = f1_score(y_test_labels, test_preds, average='micro')
+
+# accuracy_train = accuracy_score(y_train_labels, train_preds)
+# f1_score_train = f1_score(y_train_labels, train_preds, average='micro')
+
+# print(f"Testing Accuracy: {accuracy_test:.4f}, F1 Score (Micro): {f1_score_test:.4f}")
+# print(f"Training Accuracy: {accuracy_train:.4f}, F1 Score (Micro): {f1_score_train:.4f}")
+
+# Predicting on images!!
+
+test_pred_labels = best_rf.predict(testX)
+
+# Convert testY from one-hot encoding to class labels if necessary
+if len(testY.shape) > 1:
+    true_labels = np.argmax(testY, axis=1)
+else:
+    true_labels = testY  # Assuming testY is already class labels
+
+# Mapping numeric labels back to letters using the 'key' dictionary provided
+mapped_true_labels = [key[label] for label in true_labels]
+mapped_pred_labels = [key[label] for label in test_pred_labels]
+
+# Select a few random images from the test set to display
+num_images = 5
+random_indices = np.random.choice(testX.shape[0], num_images, replace=False)
+
+# Setup for a 1x5 grid
+fig, axes = plt.subplots(nrows=1, ncols=num_images, figsize=(15, 3))  # Adjust figsize for better display
+
+for ax, idx in zip(axes.flat, random_indices):
+    # Reshape the image for display
+    # Ensure testX is properly accessed depending on its format (DataFrame or ndarray)
+    if hasattr(testX, 'iloc'):  # testX is a DataFrame
+        image = testX.iloc[idx].values.reshape(28, 28)
+    else:  # testX is an ndarray
+        image = testX[idx].reshape(28, 28)
+
+    ax.imshow(image, cmap='gray')
+    ax.set_title(f'Actual: {mapped_true_labels[idx]}\nPredicted: {mapped_pred_labels[idx]}')
+    ax.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+
+```
 
 
 # Reflection
