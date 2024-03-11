@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023) (preloaded format=xelatex 2024.3.1)  11 MAR 2024 12:04
+This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023) (preloaded format=xelatex 2024.3.11)  11 MAR 2024 12:28
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -883,16 +883,18 @@ File: HW2_Reflection_files/figure-pdf/random-images-from-dataset-output-2.pdf Gr
 
 
 ] [2]
+File: HW2_Reflection_files/figure-pdf/model_output_dnn_graph-output-1.pdf Graphic file (type pdf)
+<use HW2_Reflection_files/figure-pdf/model_output_dnn_graph-output-1.pdf>
 ! Text line contains an invalid character.
-l.220 ...- accuracy: 0.0000e+00 - loss: 33.4448^^H
+l.229   1/225 ━━━━━━━━━━━━━━━━━━━━ 7s 32ms/step^^H
                                                   ^^H^^H^^H^^H^^H^^H^^H^^H^^... 
 Here is how much of TeX's memory you used:
- 23217 strings out of 476773
- 450121 string characters out of 5801680
+ 23223 strings out of 476752
+ 450565 string characters out of 5800221
  1930839 words of memory out of 5000000
- 44957 multiletter control sequences out of 15000+600000
+ 44986 multiletter control sequences out of 15000+600000
  561649 words of font info for 67 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 108i,7n,121p,10909b,395s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 108i,7n,121p,10909b,396s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
 Output written on HW2_Reflection.pdf (2 pages).
