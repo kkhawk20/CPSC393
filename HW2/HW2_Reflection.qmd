@@ -2,15 +2,20 @@
 title: "Homework 2"
 author: "Kelsey Hawkins"
 format: pdf
+jupyter: python3
 ---
 
-
 # Introduction
-An introduction should introduce the problem and data you're working on, give some background and relevant detail for the reader, and explain why it is important.
+ASL is a prominent language in the American deaf community. With this in mind, I have a dataset of images containing the ASL dictionary, excluding the letters that need motion. The dataset was already flattened into greyscale values, ready for model input with a few preprocessing changes. This model will help translate ASL images to text for those who do not understand it, or want to learn it. 
 
 # Analysis 
 Any exploratory analysis of your data, and general summarization of the data (e.g. summary statistics, correlation heatmaps, graphs, information about the data...). Tell the reader about the types of variables you have and some general information about them, Plots and/or Tables are always great. This should also include any cleaning and joining you did.
-If you want a table you can make one with this website and paste the markdown table here. For example:
+
+'''{python}
+import pandas as pd
+df = pd.Dataframe({"A":[1,2]})
+print(df)
+'''
 
 # Methods
 Explain the structure of your model and your approach to building it. This can also include changes you made to your model in the process of building it. Someone should be able to read your methods section and generally be able to tell exactly what architechture you used. However REMEMBER that this should be geared towards an audience who might not understand Keras code.
