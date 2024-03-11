@@ -8,11 +8,9 @@ format: pdf
 ASL is a prominent language in the American deaf community. With this in mind, I have a dataset of images containing the ASL dictionary, excluding the letters that need motion. The dataset was already flattened into greyscale values, ready for model input with a few preprocessing changes. This model will help translate ASL images to text for those who do not understand it, or want to learn it. 
 
 # Analysis 
-Any exploratory analysis of your data, and general summarization of the data (e.g. summary statistics, correlation heatmaps, graphs, information about the data...). Tell the reader about the types of variables you have and some general information about them, Plots and/or Tables are always great. This should also include any cleaning and joining you did.
+The first exploratory item I did was visualizing a few images from the dataset. Not only did I want to ensure the data accuracy, but I wanted to see what resolution I was working with. It was hard to do any summary statistics or heatmaps, etc. due to the data being flattened images so no EDA would have been useful in this case.
 
-The first exploratory item I did was visualizing a few images from the dataset. Not only did I want to ensure the data accuracy, but I wanted to see what resolution I was working with. It was hard to do any summary statistics or heatmaps, etc. due to the data being flattened images so no EDA would have been useful. 
-
-
+However, the images have a 28 x 28 x 1 size, a very low resolution image of hands depicting each letter of the american alphabet. Since the images have been flattened into columns of greyscale values, there will be 784 columns, and all values except for the predictor variable were scaled between 0-1. The predictor variable is a single number that denotes a letter of the alphabet, excluding J and Z which require motion. 
 
 ```{python}
 #| label: Random Images from dataset
@@ -88,6 +86,8 @@ for i in range(2):
 
 # Methods
 Explain the structure of your model and your approach to building it. This can also include changes you made to your model in the process of building it. Someone should be able to read your methods section and generally be able to tell exactly what architechture you used. However REMEMBER that this should be geared towards an audience who might not understand Keras code.
+
+The first model I created is a Deep Feed-Forward Neural Network. I started with a simple model, built in class that had about 6 hidden layers. I then expanded it by adding more dropout, dense, and batch normalization layers. Each dense layer has an activation function of reLU, and a kernel regularizer of L2 on two early dense layers. The last dense layer outputs 24 nodes with a softmax activation function for predicted probabilities for each letter. When I compiled my model, I tested multiple optimizers including SGD, Adam, and RMSprop. The model included early stopping to prevent overfitting. 
 
 # Results
 Detailed discussion of how your model performed. Include a discussion about whether or not Deep Learning was necessary in this situation.
