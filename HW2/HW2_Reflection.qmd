@@ -6,7 +6,7 @@ format: pdf
 # Introduction
 ASL is a prominent language in the American deaf community. With this in mind, I have a dataset of images containing the ASL dictionary, excluding the letters that need motion. The dataset was already flattened into greyscale values, ready for model input with a few preprocessing changes. This model will help translate ASL images to text for those who do not understand it, or want to learn it. 
 
-![Random Viz Images](/Users/kelseyhawkins/Desktop/CPSC_Courses/CPSC_393/CPSC393/HW2/random_image_explore.png){width = 80%}
+![Random Viz Images](/Users/kelseyhawkins/Desktop/CPSC_Courses/CPSC_393/CPSC393/HW2/random_image_explore.png)
 
 # Analysis 
 The first exploratory item I did was visualizing a few images from the dataset. Not only did I want to ensure the data accuracy, but I wanted to see what resolution I was working with. It was hard to do any summary statistics or heatmaps, etc. due to the data being flattened images so no EDA would have been useful in this case.
