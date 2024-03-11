@@ -298,6 +298,7 @@ if len(testY.shape) > 1:  # testY is one-hot encoded
 else:
     y_test_labels = testY  # testY is already in label format
 
+# Quarto does not like these for some reason... 
 # # Evaluate the best model
 # accuracy_test = accuracy_score(y_test_labels, test_preds)
 # f1_score_test = f1_score(y_test_labels, test_preds, average='micro')
@@ -343,10 +344,7 @@ for ax, idx in zip(axes.flat, random_indices):
 
 plt.tight_layout()
 plt.show()
-
-
 ```
-
 
 # Reflection
 In this assignment, I did not come across many struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
