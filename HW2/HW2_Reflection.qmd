@@ -26,7 +26,7 @@ With my two models, it is proven that deep learning is not needed. In the deep n
 
 In the random forest classifier model, the metrics were quite different than the DNN. This further proves deep learning is not necessary in this context as the comparison of scores were multitudes different. The random forest classifier outputted very high metrics once it was tuned. The tuner found the best number of estimators to be 300, the min samples split of 2, and min samples leaf to be 1 and max depth of 20. The training and testing accuracy showed signs of overfitting as the training accuracy was 100% and the testing accuracy was 83%. In the images below, we can see the predictions were valid for all five images, as opposed to the predictions made by the DNN. 
 
-
+![Random Forest Classifier Predictions](/Users/kelseyhawkins/Desktop/CPSC_Courses/CPSC_393/CPSC393/HW2/RFC_image_pred.png)
 
 # Reflection
 In this assignment, I did not come across many struggles or problems with the code or analysis. It was very interesting to look into the architecture and math behind the models to prove why the neural network did horribly compared to the random forest classifier. I think this assignment was great to prove that you don't always need deep learning architectures with your models, and sometimes simple models work best. 
