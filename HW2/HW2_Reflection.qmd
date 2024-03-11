@@ -85,12 +85,38 @@ for i in range(2):
 
 
 # Methods
-Explain the structure of your model and your approach to building it. This can also include changes you made to your model in the process of building it. Someone should be able to read your methods section and generally be able to tell exactly what architechture you used. However REMEMBER that this should be geared towards an audience who might not understand Keras code.
-
 The first model I created is a Deep Feed-Forward Neural Network. I started with a simple model, built in class that had about 6 hidden layers. I then expanded it by adding more dropout, dense, and batch normalization layers. Each dense layer has an activation function of reLU, and a kernel regularizer of L2 on two early dense layers. The last dense layer outputs 24 nodes with a softmax activation function for predicted probabilities for each letter. When I compiled my model, I tested multiple optimizers including SGD, Adam, and RMSprop. The model included early stopping to prevent overfitting. 
+
+The second model I created is a Random Forest Classifier. I created a simple one to get a general sense of the model outputs and comparison to the DNN. Then, I built a tuned RFC by utilizing the Randomized Search CV module. The parameters I tuned were the number of estimators, max depth, min samples split and leaf. The scorers were a combination of accuracy and F1 for a combination between all three classification metrics. 
 
 # Results
 Detailed discussion of how your model performed. Include a discussion about whether or not Deep Learning was necessary in this situation.
+
+```{python}
+#| label: Random Images from dataset
+#| fig-cap: "Random Images from Dataset"
+#| echo : false
+
+import warnings
+warnings.filterwarnings('ignore')
+import yaml
+
+import numpy as np
+import pandas as pd
+
+from keras.datasets import mnist
+import keras as kb
+
+from sklearn.preprocessing import LabelBinarizer
+
+from plotnine import *
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import make_scorer, accuracy_score, f1_score
+
+
+
+```
 
 # Reflection
 In this assignment, I did not come across any struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
