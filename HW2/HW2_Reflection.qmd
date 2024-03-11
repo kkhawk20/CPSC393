@@ -10,6 +10,10 @@ ASL is a prominent language in the American deaf community. With this in mind, I
 # Analysis 
 Any exploratory analysis of your data, and general summarization of the data (e.g. summary statistics, correlation heatmaps, graphs, information about the data...). Tell the reader about the types of variables you have and some general information about them, Plots and/or Tables are always great. This should also include any cleaning and joining you did.
 
+The first exploratory item I did was visualizing a few images from the dataset. Not only did I want to ensure the data accuracy, but I wanted to see what resolution I was working with. It was hard to do any summary statistics or heatmaps, etc. due to the data being flattened images so no EDA would have been useful. 
+
+
+
 ```{python}
 #| label: Random Images from dataset
 #| fig-cap: "Random Images from Dataset"
