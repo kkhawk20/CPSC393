@@ -3,7 +3,6 @@ title: "Homework 2"
 author: "Kelsey Hawkins"
 format: pdf
 ---
-
 # Introduction
 ASL is a prominent language in the American deaf community. With this in mind, I have a dataset of images containing the ASL dictionary, excluding the letters that need motion. The dataset was already flattened into greyscale values, ready for model input with a few preprocessing changes. This model will help translate ASL images to text for those who do not understand it, or want to learn it. 
 
@@ -18,6 +17,7 @@ However, the images have a 28 x 28 x 1 size, a very low resolution image of hand
 The first model I created is a Deep Feed-Forward Neural Network. I started with a simple model, built in class that had about 6 hidden layers. I then expanded it by adding more dropout, dense, and batch normalization layers. Each dense layer has an activation function of reLU, and a kernel regularizer of L2 on two early dense layers. The last dense layer outputs 24 nodes with a softmax activation function for predicted probabilities for each letter. When I compiled my model, I tested multiple optimizers including SGD, Adam, and RMSprop. The model included early stopping to prevent overfitting. 
 
 ![Deep Neuaral Network Metrics Graph](/Users/kelseyhawkins/Desktop/CPSC_Courses/CPSC_393/CPSC393/HW2/DNN_graph_output.png){width = 80%}
+![Deep Neural Network Predictions](/Users/kelseyhawkins/Desktop/CPSC_Courses/CPSC_393/CPSC393/HW2/DNN_image_pred.png){width = 80%}
 
 The second model I created is a Random Forest Classifier. I created a simple one to get a general sense of the model outputs and comparison to the DNN. Then, I built a tuned RFC by utilizing the Randomized Search CV module. The parameters I tuned were the number of estimators, max depth, min samples split and leaf. The scorers were a combination of accuracy and F1 for a combination between all three classification metrics. 
 
