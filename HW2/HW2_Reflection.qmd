@@ -92,9 +92,11 @@ The second model I created is a Random Forest Classifier. I created a simple one
 # Results
 Detailed discussion of how your model performed. Include a discussion about whether or not Deep Learning was necessary in this situation.
 
+With my two models, it is proven that deep learning is not needed. In the deep neural network, no matter how many layers I added or removed, or tuning I did, the metrics did not significantly improve. Both the accuracy and F1 scores were extremely low and the model failed to fit to the data well. Especially since I could not use convolutional layers, the neural network failed to find features well. 
+
 ```{python}
-#| label: Random Images from dataset
-#| fig-cap: "Random Images from Dataset"
+#| label: Model_output_DNN_graph
+#| fig-cap: "Model validation and test over epochs"
 #| echo : false
 
 import warnings
@@ -114,10 +116,142 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.metrics import make_scorer, accuracy_score, f1_score
 
+# build structure of the model!! DNN
+# The images are naturally 28*28*1 shape, so input will be 784 (columns)
+model = kb.Sequential([
+    kb.layers.Dense(500, input_shape = [784]), #input
+    kb.layers.Dense(300, activation='relu', kernel_regularizer = "l2"),
+    kb.layers.BatchNormalization(),
+    kb.layers.Dropout(0.2),
+    kb.layers.Dense(150, activation='relu', kernel_regularizer = "l1"),
+    kb.layers.Dropout(0.2),
+    kb.layers.Dense(90, activation='relu'),
+    kb.layers.Dropout(0.2),
+    kb.layers.Dense(50, activation='relu'),
+    kb.layers.BatchNormalization(),
+    kb.layers.Dense(24, activation = "softmax") #output
+])
+
+# compile model, commenting out the optimizer I dont want (from me testing them out hehe)
+# Did the best with SGD!!
+
+model.compile(loss="categorical_crossentropy", optimizer=kb.optimizers.SGD(),
+	metrics=["accuracy"])
+
+early = [kb.callbacks.EarlyStopping(monitor = 'val_loss', patience = 5)]
+
+history = model.fit(trainX, trainY, epochs = 100, validation_data=(testX, testY), callbacks = early, verbose = 0)
+
+# Plot training & validation accuracy values
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Model Accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Test'], loc='upper left')
+
+# Plot training & validation loss values
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model Loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Test'], loc='upper left')
+
+plt.show()
+
+train_pred = model.predict(trainX)
+train_pred_labels = np.argmax(train_pred, axis=1)
+
+# Calculate accuracy for the training set
+acc_train = accuracy_score(y_train, train_pred_labels)
+f1_train = f1_score(y_train, train_pred_labels, average = 'micro')
+
+# For the testing set, do the prediction and then calculate accuracy
+test_pred = model.predict(testX)
+test_pred_labels = np.argmax(test_pred, axis=1)
+acc_test = accuracy_score(y_test, test_pred_labels)
+f1_test = f1_score(y_test, test_pred_labels, average = 'micro')
+
+print(f"Training accuracy: {acc_train:.4f}")
+print(f"Training F1: {f1_train:.4f}")
+print(f"Testing accuracy: {acc_test:.4f}")
+print(f"Testing F1: {f1_test:.4f}")
 
 
 ```
 
+
+```{python}
+#| label: Model_output_DNN_Images
+#| fig-cap: "DNN Predictions over Test Images"
+#| echo : false
+
+import warnings
+warnings.filterwarnings('ignore')
+import yaml
+
+import numpy as np
+import pandas as pd
+
+from keras.datasets import mnist
+import keras as kb
+
+from sklearn.preprocessing import LabelBinarizer
+
+from plotnine import *
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import make_scorer, accuracy_score, f1_score
+
+key = {0:'a', 1:'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f',
+       6: 'g', 7: 'h', 8: 'i', 9: 'j', 10: 'k',
+       11: 'l', 12: 'm', 13: 'n', 14: 'o', 15: 'p',
+       16: 'q', 17: 'r', 18: 's', 19: 't', 20: 'u',
+       21: 'v', 22: 'w', 23: 'x', 24: 'y', 25: 'z'
+       }
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Predicting on test dataset
+test_pred = model.predict(testX)
+test_pred_labels = np.argmax(test_pred, axis=1)
+
+# Actual labels in numeric form
+true_labels = np.argmax(testY, axis=1)
+
+# Mapping numeric labels back to letters using 'key' dictionary
+mapped_true_labels = [key[label] for label in true_labels]
+mapped_pred_labels = [key[label] for label in test_pred_labels]
+
+# Select a few random images from the test set to display
+num_images = 5
+random_indices = np.random.choice(testX.shape[0], num_images, replace=False)
+
+# Setup for a 1x5 grid
+fig, axes = plt.subplots(nrows=1, ncols=num_images, figsize=(15, 15))
+
+for ax, idx in zip(axes.flat, random_indices):
+    # Reshape the image for display
+    image = testX.iloc[idx].values.reshape(28, 28)  # Reshape back to 28x28 for display
+    ax.imshow(image, cmap='gray')
+    ax.set_title(f'Actual: {mapped_true_labels[idx]}\nPredicted: {mapped_pred_labels[idx]}')
+    ax.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+```
+
+In the random forest classifier model, the metrics were quite different than the DNN. This further proves deep learning is not necessary in this context as the comparison of scores were multitudes different. The random forest classifier outputted very high metrics once it was tuned, 
+
+
+
 # Reflection
-In this assignment, I did not come across any struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
+In this assignment, I did not come across many struggles or problems with the code or analysis. However I did refer back to the math of the models to justify my answers and think about why the models performed the way they did. It was interesting to be able to quantify them with a simple classification problem and think about how each model handles class imbalances in the slightest way, by about 20%. In the future, I would approach it the same way as I did here, as it seemed to work well. 
 
