@@ -1,5 +1,7 @@
 # CPSC393
-### This repository contains the homework assignments for CPSC 393 - Machine Learning at Chapman University. The course is taught by Dr. Chelsea Parlett.
+### This repository contains the homework assignments for CPSC 393 - Machine Learning at Chapman University. 
+### The course is taught by Dr. Chelsea Parlett.
+### Taken Spring 2024
 
 * HW1 : Support Vector Machines
 
