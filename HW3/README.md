@@ -6,7 +6,10 @@
 * CPSC 393 - 01
 * HW 3
 * Deviations: None I know of
-* References : Class lectures/classworks, no other student collaboration
+* References :
+  * Class lectures/classworks, no other student collaboration
+  * https://keras.io/api/callbacks/learning_rate_scheduler/
+  * https://keras.io/api/applications/vgg/
 * ChatGPT Usage Prompt :
   * General debugging
   * Help me visualize my predicted outputs from my model in a grid of 5 images that show the original actual value and predicted value. I just need to matplotlib outline code to get started
