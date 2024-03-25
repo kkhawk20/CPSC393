@@ -10,6 +10,7 @@
   * Class lectures/classworks, no other student collaboration
   * https://keras.io/api/callbacks/learning_rate_scheduler/
   * https://keras.io/api/applications/vgg/
+  * https://www.tensorflow.org/api_docs/python/tf/keras/metrics/sparse_categorical_crossentropy
 * ChatGPT Usage Prompt :
   * General debugging
   * Help me visualize my predicted outputs from my model in a grid of 5 images that show the original actual value and predicted value. I just need to matplotlib outline code to get started
