@@ -6,3 +6,7 @@
 * HW1 : Support Vector Machines
 
 * HW2 : ASL MNIST Dataset, Neural Network and Random Forest Classifier
+
+* HW3 : Fruit Classification with CNN's and transfer learning
+
+* HW4 : Recurrent Neural Networks, next sentence generation with BERT(Tokenizer/NLP)
