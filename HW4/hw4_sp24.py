@@ -48,8 +48,8 @@ word_to_int = {word: i for i, word in enumerate(unique_words)}
 
 n_words = len(words)  # Total number of words in the text.
 n_vocab = len(unique_words)  # Number of unique words (vocabulary size).
-print("Total Words: ", n_words)
-print("Total Vocab: ", n_vocab)
+# print("Total Words: ", n_words)
+# print("Total Vocab: ", n_vocab)
 
 # changeable params
 my_file = book_dir
@@ -89,13 +89,10 @@ def save_doc(lines, filename):
 
 # load document
 doc = load_doc(my_file)
-print(doc[:50])
+# print(doc[:50])
 
 # clean document
 tokens = clean_doc(doc)
-# print(tokens[:50])
-# print('Total Tokens: %d' % len(tokens))
-# print('Unique Tokens: %d' % len(set(tokens)))
 
 with open(os.path.join(save_dir, "metrics.txt"), "w") as f:
     f.write('Total Tokens: %d' % len(tokens) + "\n")
@@ -112,7 +109,8 @@ for i in range(length, len(tokens)):
  line = ' '.join(seq)
  # store
  sequences.append(line)
-print('Total Sequences: %d' % len(sequences))
+# print('Total Sequences: %d' % len(sequences))
+ 
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
     f.write('Total Sequences: %d' % len(sequences) + "\n")
 
@@ -147,13 +145,16 @@ y_train = y[0:n_train]
 X_test = X[n_train:]
 y_test = y[n_train:]
 
+
+
+
 """# 1. LSTM - basic"""
 
 # LSTM model
 
 vocab_size = len(word_to_int) + 1
 embedding_dim = 50  # Size of the embedding vectors
-max_length = 100  # Sequence length, each input sequence is 10 words long
+max_length = 100  # Sequence length, each input sequence is 100 words long
 
 inputs = Input(shape=(max_length,))
 embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_length)(inputs)
@@ -183,11 +184,11 @@ history = model.fit(X_train, y_train, epochs=500, batch_size=128,
                     callbacks = [early_stopping, model_checkpoint])
 
 # Accuracy/val_accuracy
-print("Accuracy: ", history.history['accuracy'][:1])
-print("Val Accuracy: ",history.history['val_accuracy'][:1])
+# print("Accuracy: ", history.history['accuracy'][:1])
+# print("Val Accuracy: ",history.history['val_accuracy'][:1])
 
-print("Loss: ", history.history['loss'][:1])
-print("Val Loss: ", history.history['val_loss'][:1])
+# print("Loss: ", history.history['loss'][:1])
+# print("Val Loss: ", history.history['val_loss'][:1])
 
 # Printing those metrics to a file
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
@@ -250,12 +251,12 @@ seq_length = len(lines[0].split()) - 1
 
 # select a seed text
 seed_text = lines[randint(0,len(lines))]
-print(seed_text + '\n')
+# print(seed_text + '\n')
 
 # generate new text
 best_model = load_model('./best_model.h5')
 generated = generate_seq(best_model, tokenizer, seq_length, seed_text, 50)
-print(generated)
+# print(generated)
 
 # Printing to file
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
@@ -324,11 +325,11 @@ history = model.fit(X_train, y_train, epochs=500, batch_size=32,
                     callbacks = [early_stopping, model_checkpoint])
 
 # Accuracy/val_accuracy
-print("Accuracy: ", history.history['accuracy'][:1])
-print("Val Accuracy: ",history.history['val_accuracy'][:1])
+# print("Accuracy: ", history.history['accuracy'][:1])
+# print("Val Accuracy: ",history.history['val_accuracy'][:1])
 
-print("Loss: ", history.history['loss'][:1])
-print("Val Loss: ",history.history['val_loss'][:1])
+# print("Loss: ", history.history['loss'][:1])
+# print("Val Loss: ",history.history['val_loss'][:1])
 
 # Printing those metrics to a file
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
