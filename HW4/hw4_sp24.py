@@ -153,8 +153,8 @@ y_test = y[n_train:]
 # LSTM model
 
 vocab_size = len(word_to_int) + 1
-embedding_dim = 50  # Size of the embedding vectors
-max_length = 100  # Sequence length, each input sequence is 100 words long
+embedding_dim = 20  # Size of the embedding vectors (between 20-100???)
+max_length = 100  # Sequence length, each input sequence is 100 words long 
 
 inputs = Input(shape=(max_length,))
 embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_length)(inputs)
@@ -182,13 +182,6 @@ model_checkpoint = ModelCheckpoint(
 history = model.fit(X_train, y_train, epochs=500, batch_size=128,
                     validation_data=(X_test, y_test),
                     callbacks = [early_stopping, model_checkpoint])
-
-# Accuracy/val_accuracy
-# print("Accuracy: ", history.history['accuracy'][:1])
-# print("Val Accuracy: ",history.history['val_accuracy'][:1])
-
-# print("Loss: ", history.history['loss'][:1])
-# print("Val Loss: ", history.history['val_loss'][:1])
 
 # Printing those metrics to a file
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
@@ -271,40 +264,34 @@ with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
 from tensorflow.keras.regularizers import l1, l2
 
 vocab_size = len(word_to_int) + 1
-embedding_dim = 50  # Size of the embedding vectors
+embedding_dim = 20  # Size of the embedding vectors
 max_length = 100  # Sequence length, each input sequence is 100 words long
 
 inputs = Input(shape=(max_length,))
 embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_length)(inputs)
-x = LSTM(256, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
+x = LSTM(100, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
                   kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
                   recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
                   bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
                   )(embedding)
 x = Dropout(0.2)(x)
-x = LSTM(256, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
+x = LSTM(100, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
                   kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
                   recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
                   bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
                   )(x)
 x = Dropout(0.2)(x)
-x = LSTM(256, return_sequences=False,  # Set to False if this is the last LSTM layer before the Dense output layer
+x = LSTM(100, return_sequences=False,  # Set to False if this is the last LSTM layer before the Dense output layer
                   kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
                   recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
                   bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
                   )(x)
 x = Dropout(0.2)(x)
-x = Dense(256, activation = 'relu')(x)
+x = Dense(100, activation = 'relu')(x)
 output = Dense(y.shape[1], activation='softmax')(x)
 
 model = Model(inputs = inputs, outputs = output)
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics = ['accuracy'])
-
-def scheduler(epoch, lr):
-    if epoch < 10:
-        return lr  # No change in learning rate for the first 10 epochs
-    else:
-        return lr * 0.99  # Reduce the learning rate by 10% every epoch after the 10th
 
 early_stopping = EarlyStopping(
     monitor='val_loss',
@@ -312,8 +299,6 @@ early_stopping = EarlyStopping(
     restore_best_weights=True,
     mode = 'min',
     verbose = 1)
-
-lr_scheduler = LearningRateScheduler(scheduler)
 
 model_checkpoint = ModelCheckpoint(
     filepath='./best_model_2.h5',
@@ -325,13 +310,6 @@ model_checkpoint = ModelCheckpoint(
 history = model.fit(X_train, y_train, epochs=500, batch_size=32,
                     validation_data=(X_test, y_test),
                     callbacks = [early_stopping, model_checkpoint])
-
-# Accuracy/val_accuracy
-# print("Accuracy: ", history.history['accuracy'][:1])
-# print("Val Accuracy: ",history.history['val_accuracy'][:1])
-
-# print("Loss: ", history.history['loss'][:1])
-# print("Val Loss: ",history.history['val_loss'][:1])
 
 # Printing those metrics to a file
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
