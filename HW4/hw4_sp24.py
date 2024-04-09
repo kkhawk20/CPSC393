@@ -112,7 +112,7 @@ for i in range(length, len(tokens)):
 # print('Total Sequences: %d' % len(sequences))
  
 with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
-    f.write('Total Sequences: %d' % len(sequences) + "\n")
+    f.write('Total Sequences: %d' % len(sequences) + "\n"+ "\n")
 
 # save sequences to file
 out_filename = my_file[:-4] + '_seq.txt'
@@ -195,7 +195,7 @@ with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
     f.write("Basic Model Accuracy: " + str(history.history['accuracy'][:1]) + "\n")
     f.write("Basic Model Val Accuracy: " + str(history.history['val_accuracy'][:1]) + "\n")
     f.write("Basic Model Loss: " + str(history.history['loss'][:1]) + "\n")
-    f.write("Basic Model Val Loss: " + str(history.history['val_loss'][:1]) + "\n")
+    f.write("Basic Model Val Loss: " + str(history.history['val_loss'][:1]) + "\n"+ "\n")
 
 # Plot training & validation accuracy
 plt.plot(history.history['accuracy'])
@@ -205,6 +205,7 @@ plt.ylabel('Accuracy')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
 plt.savefig(os.path.join(save_dir, "accuracy_plot.png"))
+plt.close()
 
 # Plot training & validation loss
 plt.plot(history.history['loss'])
@@ -214,6 +215,7 @@ plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
 plt.savefig(os.path.join(save_dir, "loss_plot.png"))
+plt.close()
 
 # load doc into memory
 def load_doc(filename):
@@ -336,7 +338,7 @@ with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
     f.write("Deep Model Accuracy: " + str(history.history['accuracy'][:1]) + "\n")
     f.write("Deep Model Val Accuracy: " + str(history.history['val_accuracy'][:1]) + "\n")
     f.write("Deep Model Loss: " + str(history.history['loss'][:1]) + "\n")
-    f.write("Deep Model Val Loss: " + str(history.history['val_loss'][:1]) + "\n")
+    f.write("Deep Model Val Loss: " + str(history.history['val_loss'][:1]) + "\n"+ "\n")
 
 # Plot training & validation accuracy
 plt.plot(history.history['accuracy'])
@@ -346,6 +348,8 @@ plt.ylabel('Accuracy')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
 plt.savefig(os.path.join(save_dir, "accuracy_ploD.png"))
+plt.close()
+
 
 # Plot training & validation loss
 plt.plot(history.history['loss'])
@@ -355,6 +359,7 @@ plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
 plt.savefig(os.path.join(save_dir, "loss_ploD.png"))
+plt.close()
 
 
 # load doc into memory
