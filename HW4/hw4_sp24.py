@@ -1,16 +1,8 @@
 """
 # Homework 4 (Sequential Models)
-
-1. Choose a book or other text to train your model on (I suggest [Project Gutenberg](https://www.gutenberg.org/ebooks/) to find .txt files but you can find them elsewhere). Make sure your file is a `.txt` file. Clean your data (You may use [this file](https://colab.research.google.com/drive/1HCgKn5XQ7Q3ywxGszVWx2kddfT9UBASp?usp=sharing) we talked about in class as a baseline). Build a sequential model (LSTM, GRU, SimpleRNN, or Transformer) that generates new lines based on the training data (NO TRANSFER LEARNING). While your model doesn't need to have perfect accuracy, you must have an appropriate architecture and train it for a reasonable amount of epochs.
-
-Print out or write 10 generated sequences from your model (Similar to Classwork 17 where we generated new Pride and Prejudice lines, but now with words instead of charachters. Feel free to use [this]() as a reference for how to generate text from a trained model). Assess in detail how good they are, what they're good at, what they struggle to do well. INCLUDE THESE 10 sequences in your report.
-
-2. Make a new model with ONE substantial adjustment (e.g. use a custom embedding layer if you didn't already, use a pre-trained embedding layer if you didn't already, use a DEEP LSTM/GRU with multiple recurrent layers, use a pre-trained model to do transfer learning and fine-tune it...etc.). While your model doesn't need to have perfect accuracy, you must have an appropriate architecture and train it for a reasonable amount of epochs.
-
-Print out or write 10 generated sequences from your model (Similar to Classwork 17 where we generated new Pride and Prejudice lines, but now with words instead of charachters. Feel free to use [this]() as a reference for how to generate text from a trained model. INCLUDE THESE 10 sequences in your report. Assess in detail how good they are, what they're good at, what they struggle to do well.  Did the performance of your model change?
-
-3. Then create a **technical report** discussing your model building process, the results, and your reflection on it. The report should follow the format in the example including an Introduction, Analysis, Methods, Results, and Reflection section.
 """
+import os
+os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 
 import pandas as pd
 import numpy as np
@@ -219,6 +211,7 @@ def load_doc(filename):
  # close the file
  file.close()
  return text
+
 def generate_seq(model, tokenizer, seq_length, seed_text, n_words):
   result = []
   in_text = seed_text
@@ -258,6 +251,9 @@ with open(os.path.join(save_dir, "metrics.txt"), "a") as f:
     f.write("Seed Text: " + seed_text + "\n")
     f.write("Generated Text: " + generated + "\n")
 
+
+
+
 """# 2. LSTM with DEEPER learning - More Layers"""
 
 # LSTM model DEEPER!!
@@ -269,22 +265,22 @@ max_length = 100  # Sequence length, each input sequence is 100 words long
 
 inputs = Input(shape=(max_length,))
 embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_length)(inputs)
-x = LSTM(100, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
-                  kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
-                  recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
-                  bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
+x = LSTM(100, return_sequences=True,  
+                  kernel_regularizer=l2(0.01),  # L2 regularization to the input weights
+                  recurrent_regularizer=l1(0.01),  # L1 regularization to the recurrent weights
+                  bias_regularizer=l2(0.01)  # L2 regularization to the bias
                   )(embedding)
 x = Dropout(0.2)(x)
-x = LSTM(100, return_sequences=True,  # Set to False if this is the last LSTM layer before the Dense output layer
-                  kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
-                  recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
-                  bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
+x = LSTM(100, return_sequences=True,  
+                  kernel_regularizer=l2(0.01),  # L2 regularization to the input weights
+                  recurrent_regularizer=l1(0.01),  # L1 regularization to the recurrent weights
+                  bias_regularizer=l2(0.01)  # L2 regularization to the bias
                   )(x)
 x = Dropout(0.2)(x)
-x = LSTM(100, return_sequences=False,  # Set to False if this is the last LSTM layer before the Dense output layer
-                  kernel_regularizer=l2(0.01),  # Applies L2 regularization to the input weights
-                  recurrent_regularizer=l1(0.01),  # Applies L1 regularization to the recurrent weights
-                  bias_regularizer=l2(0.01)  # Applies L2 regularization to the bias
+x = LSTM(100, return_sequences=False, 
+                  kernel_regularizer=l2(0.01),  # L2 regularization to the input weights
+                  recurrent_regularizer=l1(0.01),  # L1 regularization to the recurrent weights
+                  bias_regularizer=l2(0.01)  # L2 regularization to the bias
                   )(x)
 x = Dropout(0.2)(x)
 x = Dense(100, activation = 'relu')(x)

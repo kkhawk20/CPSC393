@@ -2,17 +2,3 @@ Total Tokens: 25016
 Unique Tokens: 3371
 Total Sequences: 24915
 
-Basic Model Accuracy: [0.025185631588101387]
-Basic Model Val Accuracy: [0.02889825403690338]
-Basic Model Loss: [6.759350776672363]
-Basic Model Val Loss: [6.557210445404053]
-
-Seed Text: instant came the fiery tybalt with his sword which as he defiance to my ears he swung about his head and cut the winds who nothing hurt withal him in scorn while we were interchanging thrusts and blows came more and more and fought on part and part till the prince came who parted either part lady montague o where is romeo saw you him today right glad i am he was not at this fray benvolio madam an hour before the sun forth the golden window of the east a troubled mind drave me to walk abroad where underneath the
-Generated Text: moves occasion associate dismal nickname motion serves must spread off country but rushes slowly winds wolvishravening seeks eyes afflicted trunk coachmakers woes fighting fee any means grasshoppers raven stiff humorous montague rejoice villain virtues heareth damnation drivelling straining chide palmers unnatural bounds tower gentle wear noble writing ourselves yond girls
-Deep Model Accuracy: [0.02679109014570713]
-Deep Model Val Accuracy: [0.02889825403690338]
-Deep Model Loss: [11.12328052520752]
-Deep Model Val Loss: [7.423956394195557]
-
-Seed Text: and juliet juliet wilt thou be gone it is not yet near day it was the nightingale and not the lark that the fearful hollow of thine ear nightly she sings on yond pomegranate tree believe me love it was the nightingale romeo it was the lark the herald of the morn no nightingale look love what envious streaks do lace the severing clouds in yonder east candles are burnt out and jocund day stands tiptoe on the misty mountain tops i must be gone and live or stay and die juliet yond light is not daylight i know it i
-Generated Text: sallow into sir loins cannot law bade answer knot gentler unwieldy soninlaw trusty pricks serve content singular minute signior paradise know ally tempesttossed forty sets possess swear sack same remedy robes complain speech musty bauble addle wood endure fast lure morsel makes leaps far courteous alla visiting simples thou held
