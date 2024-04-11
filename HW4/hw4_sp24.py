@@ -301,7 +301,7 @@ model_checkpoint = ModelCheckpoint(
     mode='min',
     verbose=1)
 
-history = model.fit(X_train, y_train, epochs=500, batch_size=32,
+history = model.fit(X_train, y_train, epochs=500, batch_size=128,
                     validation_data=(X_test, y_test),
                     callbacks = [early_stopping, model_checkpoint])
 
