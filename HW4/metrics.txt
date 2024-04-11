@@ -2,3 +2,10 @@ Total Tokens: 25016
 Unique Tokens: 3371
 Total Sequences: 24915
 
+Basic Model Accuracy: [0.02538631297647953]
+Basic Model Val Accuracy: [0.02067027986049652]
+Basic Model Loss: [6.7470526695251465]
+Basic Model Val Loss: [6.561742782592773]
+
+Seed Text: with me and montague come you this afternoon to know our farther pleasure in this case to old freetown our common judgementplace once more on pain of death all men depart exeunt prince and attendants capulet lady capulet tybalt citizens and servants montague who set this ancient quarrel new abroach speak nephew were you by when it began benvolio here were the servants of your adversary and yours close fighting ere i did approach i drew to part them in the instant came the fiery tybalt with his sword which as he defiance to my ears he swung about his head
+Generated Text: score puffs wife carries crying danger owe same learning since therewithal holp patience am hadst advances nine wedding unwieldy follow team private flower orchard spent obsequies visor lamb canopy haughty trim glory crossing tybalt near tender arrives sure youthful flask buttshaft bills fay eve wound mercy five circumstance bewitched severity
