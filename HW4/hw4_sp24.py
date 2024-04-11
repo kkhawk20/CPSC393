@@ -1,8 +1,6 @@
 """
 # Homework 4 (Sequential Models)
 """
-import os
-os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 
 import pandas as pd
 import numpy as np
