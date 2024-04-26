@@ -172,3 +172,24 @@ def plot_label_clusters(vae, data, labels):
 x_train = np.expand_dims(x_train, -1).astype("float32") / 255
 
 plot_label_clusters(vae, x_train, y_train)
+
+# plotting 25 predicted images
+n = 5
+digit_size = 28
+figure = np.zeros((digit_size * n, digit_size * n))
+grid_x = np.linspace(-1, 1, n)
+grid_y = np.linspace(-1, 1, n)[::-1]
+
+for i, yi in enumerate(grid_y):
+    for j, xi in enumerate(grid_x):
+        z_sample = np.array([[xi, yi]])
+        x_decoded = decoder.predict(z_sample)
+        digit = x_decoded[0].reshape(digit_size, digit_size)
+        figure[
+            i * digit_size : (i + 1) * digit_size,
+            j * digit_size : (j + 1) * digit_size,
+        ] = digit
+
+plt.figure(figsize=(10, 10))
+plt.imshow(figure, cmap="Greys_r")
+plt.savefig("vae_predicted.png")

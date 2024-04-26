@@ -240,7 +240,7 @@ At the beginning of the training, the generated images look like random noise. A
 
 train(train_dataset, EPOCHS)
 
-# generate 25 new images from predictions
+# generate new images from predictions
 predictions = generator(seed, training=False)
 fig = plt.figure(figsize=(5, 5))
 for i in range(predictions.shape[0]):
