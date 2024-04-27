@@ -34,25 +34,29 @@ import tensorflow as tf
 import os
 from pathlib import Path
 
+import tensorflow as tf
+from pathlib import Path
+
 class ASLVideoDataset:
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, max_frames = 30):
         self.root_dir = root_dir
-        self.samples = self._load_samples()
+        self.max_frames = max_frames
+        self.samples = []
+        self.labels = set()  # Set to collect unique labels
+        self._load_samples()
 
     def _load_samples(self):
-        samples = []
-        # Use Path for a more robust cross-platform compatibility
         for class_folder in Path(self.root_dir).iterdir():
             if class_folder.is_dir():
+                self.labels.add(class_folder.name)  # Add label to the set
                 for video_folder in class_folder.iterdir():
                     if video_folder.is_dir():
                         frames = sorted(video_folder.glob('*.jpg'))
-                        samples.append({
+                        self.samples.append({
                             'label': class_folder.name,
                             'video_id': video_folder.name,
                             'frame_paths': [str(frame) for frame in frames]
                         })
-        return samples
 
     def read_image(self, file_path):
         img = tf.io.read_file(file_path)
@@ -62,64 +66,103 @@ class ASLVideoDataset:
         return img
 
     def load_and_preprocess_video(self, sample):
-        # Convert the list of paths to a tensor
-        frame_paths_tensor = tf.convert_to_tensor(sample['frame_paths'], dtype=tf.string)
-        # Use tf.map_fn to apply read_image function to each element in the tensor
-        frames = tf.map_fn(self.read_image, frame_paths_tensor, dtype=tf.float32, back_prop=False)
+        frames = [self.read_image(frame) for frame in sample['frame_paths']]
+        num_frames = len(frames)
+        # Pad frames to max_frames
+        frames += [tf.zeros((224, 224, 3))] * (self.max_frames - num_frames)
+        frames = tf.stack(frames)
         return frames, sample['label']
 
     def create_tf_dataset(self):
-        # Use generator function for the dataset
         def gen():
             for sample in self.samples:
                 yield self.load_and_preprocess_video(sample)
-
-        dataset = tf.data.Dataset.from_generator(
+        return tf.data.Dataset.from_generator(
             gen,
-            output_signature=(
-                tf.TensorSpec(shape=(None, 224, 224, 3), dtype=tf.float32),
-                tf.TensorSpec(shape=(), dtype=tf.string)
-            )
+            output_types=(tf.float32, tf.string),
+            output_shapes=((self.max_frames, 224, 224, 3), ())
         )
-        return dataset
 
-# Usage
+# Creating the datast
 root_dir = '/app/rundir/CPSC393/FinalProject/images/'
-asl_dataset = ASLVideoDataset(root_dir)
+asl_dataset = ASLVideoDataset(root_dir, max_frames = 30)
 tf_dataset = asl_dataset.create_tf_dataset()
-tf_dataset = tf_dataset.shuffle(100).batch(4).prefetch(tf.data.experimental.AUTOTUNE)
+tf_dataset = tf_dataset.shuffle(100).padded_batch(4, padded_shapes=([None, 224, 224, 3], [])).prefetch(tf.data.experimental.AUTOTUNE)
+num_classes = len(asl_dataset.labels) # We now have the number of unique classes
 
 # Example of iterating over the dataset
 for frames, label in tf_dataset.take(1):
-    print(frames.shape)  # Should print (num_frames, 224, 224, 3)
-    print(label.numpy())  # Should print the label of the video
+    print(frames.shape)  # Should print (batch_size, num_frames, 224, 224, 3)
+    print(label.numpy())  # Should print the label of the videos
 
 
+
+
+# Model building
+
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import TimeDistributed, LSTM, Dense
-from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.layers import TimeDistributed, LSTM, Dense, Flatten, Input
+from tensorflow.keras.applications import MobileNetV2
 
-# Load pre-trained CNN
-base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+def build_model(num_classes, frame_sequence=30, frame_height=224, frame_width=224, channels=3):
+    input_shape = (frame_sequence, frame_height, frame_width, channels)
+    inputs = Input(shape=input_shape)
 
-# Freeze the convolutional base
-base_model.trainable = False
+    cnn_base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(frame_height, frame_width, channels))
+    cnn_base.trainable = False
 
-# Model Definition
-model = Sequential([
-    TimeDistributed(base_model, input_shape=(None, 224, 224, 3)),
-    TimeDistributed(Dense(512, activation='relu')),
-    LSTM(256),
-    Dense(10, activation='softmax')  # Adjust the number of classes
-])
+    model = Sequential([
+        TimeDistributed(cnn_base, input_shape=input_shape),
+        TimeDistributed(Flatten()),
+        LSTM(50),
+        Dense(256, activation='relu'),
+        Dense(num_classes, activation='softmax')
+    ])
+    
+    model.build(input_shape=(None,) + input_shape)  # Build the model with the specified input shape
+    return model
 
-# Model compilation
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+model = build_model(num_classes, 30, 224, 224, 3)  # specify the shape details
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model.summary()
 
-# Model fitting
-# Convert labels to one-hot encoding, adjust as needed for your labels
-def preprocess_labels(labels):
-    return tf.one_hot(tf.strings.to_hash_bucket_strong(labels, num_buckets=10), 10)
+# Create a mapping from label strings to integers
+label_to_index = {label: idx for idx, label in enumerate(sorted(asl_dataset.labels))}
 
-tf_dataset = tf_dataset.map(lambda x, y: (x, preprocess_labels(y)))
-model.fit(tf_dataset, epochs=10)
+def map_labels(frames, label):
+    # Convert label to its corresponding index
+    label_index = tf.py_function(lambda l: label_to_index[l.decode('utf-8')], [label], tf.int64)  # Use tf.int64 if using sparse categorical crossentropy
+    return frames, label_index
+
+tf_dataset = tf_dataset.map(map_labels)
+tf_dataset = tf_dataset.shuffle(100).batch(4).prefetch(tf.data.experimental.AUTOTUNE)
+
+# Setup training with callbacks for better monitoring and checkpointing
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
+import os
+
+checkpoint_path = "training_checkpoints/cp-{epoch:04d}.ckpt"
+checkpoint_dir = os.path.dirname(checkpoint_path)
+
+# Create a callback that saves the model's weights every 5 epochs
+cp_callback = ModelCheckpoint(
+    filepath=checkpoint_path, 
+    verbose=1, 
+    save_weights_only=True,
+    period=5)
+
+# Create a TensorBoard instance to visually monitor training
+tensorboard_callback = TensorBoard(log_dir='./logs')
+
+for frames, labels in tf_dataset.take(1):
+    print("Frames shape:", frames.shape)  # Should show (batch_size, num_frames, 224, 224, 3)
+    print("Labels type:", labels.dtype)   # Should show tf.int64 or tf.int32
+
+
+history = model.fit(
+    tf_dataset,
+    epochs=10,
+    steps_per_epoch=len(asl_dataset.samples) // 4,
+    callbacks=[cp_callback, tensorboard_callback]
+)
