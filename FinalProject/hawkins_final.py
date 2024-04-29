@@ -105,15 +105,15 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import TimeDistributed, LSTM, Dense, Flatten, Input
 from tensorflow.keras.applications import MobileNetV2
 
-def build_model(num_classes, frame_sequence=30, frame_height=224, frame_width=224, channels=3):
-    input_shape = (frame_sequence, frame_height, frame_width, channels)
-    inputs = Input(shape=input_shape)
+def build_model(num_classes):
+    input_shape = (30, 224, 224, 3)
 
-    cnn_base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(frame_height, frame_width, channels))
+    cnn_base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(244, 244, 3))
     cnn_base.trainable = False
 
     model = Sequential([
-        TimeDistributed(cnn_base, input_shape=input_shape),
+        Input(shape=input_shape),
+        TimeDistributed(MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))),
         TimeDistributed(Flatten()),
         LSTM(50),
         Dense(256, activation='relu'),
@@ -123,20 +123,24 @@ def build_model(num_classes, frame_sequence=30, frame_height=224, frame_width=22
     model.build(input_shape=(None,) + input_shape)  # Build the model with the specified input shape
     return model
 
-model = build_model(num_classes, 30, 224, 224, 3)  # specify the shape details
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-model.summary()
-
 # Create a mapping from label strings to integers
 label_to_index = {label: idx for idx, label in enumerate(sorted(asl_dataset.labels))}
 
 def map_labels(frames, label):
-    # Convert label to its corresponding index
-    label_index = tf.py_function(lambda l: label_to_index[l.decode('utf-8')], [label], tf.int64)  # Use tf.int64 if using sparse categorical crossentropy
+    # Convert label to its corresponding index using TensorFlow operations within tf.py_function
+    def decode_label(label):
+        return label_to_index[tf.compat.as_text(label.numpy())]
+    label_index = tf.py_function(decode_label, [label], tf.int32)
     return frames, label_index
 
-tf_dataset = tf_dataset.map(map_labels)
-tf_dataset = tf_dataset.shuffle(100).batch(4).prefetch(tf.data.experimental.AUTOTUNE)
+tf_dataset = asl_dataset.create_tf_dataset()
+tf_dataset = tf_dataset.map(map_labels).shuffle(100).batch(4).prefetch(tf.data.experimental.AUTOTUNE)
+
+model = build_model(num_classes)  # specify the shape details
+model.compile(optimizer='adam', 
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy'])
+model.summary()
 
 # Setup training with callbacks for better monitoring and checkpointing
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
@@ -150,7 +154,7 @@ cp_callback = ModelCheckpoint(
     filepath=checkpoint_path, 
     verbose=1, 
     save_weights_only=True,
-    period=5)
+    save_freq=5)
 
 # Create a TensorBoard instance to visually monitor training
 tensorboard_callback = TensorBoard(log_dir='./logs')
@@ -159,10 +163,44 @@ for frames, labels in tf_dataset.take(1):
     print("Frames shape:", frames.shape)  # Should show (batch_size, num_frames, 224, 224, 3)
     print("Labels type:", labels.dtype)   # Should show tf.int64 or tf.int32
 
+for inputs, labels in tf_dataset.take(1):
+    print("Input shape:", inputs.shape)
+    print("Label shape:", labels.shape)
+    predictions = model(inputs, training=False)  # Run a forward pass
+    print("Predictions shape:", predictions.shape)
 
-history = model.fit(
-    tf_dataset,
-    epochs=10,
-    steps_per_epoch=len(asl_dataset.samples) // 4,
-    callbacks=[cp_callback, tensorboard_callback]
-)
+num_classes = len(asl_dataset.labels)  # Ensure this reflects the actual number of unique classes correctly.
+print("Number of classes:", num_classes)
+
+for inputs, labels in tf_dataset.take(3):  # Check several batches to ensure consistency
+    print("Batch - Inputs shape:", inputs.shape, "Labels shape:", labels.shape)
+
+try:
+    history = model.fit(tf_dataset, epochs=10, steps_per_epoch=len(asl_dataset.samples) // 4)
+except ValueError as e:
+    print("Error during training:", e)
+    print("Investigating further...")
+    # Add more diagnostics here if needed
+
+# history = model.fit(
+#     tf_dataset,
+#     epochs=10,
+#     steps_per_epoch=len(asl_dataset.samples) // 4
+# )
+
+# callbacks=[cp_callback, tensorboard_callback]
+
+import numpy as np
+import tensorflow as tf
+
+# Create a simple synthetic dataset
+test_inputs = np.random.random((10, 30, 224, 224, 3)).astype(np.float32)  # 10 videos
+test_labels = np.random.randint(0, 409, size=(10,)).astype(np.int32)  # 10 labels
+
+test_dataset = tf.data.Dataset.from_tensor_slices((test_inputs, test_labels))
+test_dataset = test_dataset.batch(4)
+
+# Try fitting the model on this synthetic dataset
+model.fit(test_dataset, epochs=1)
+
+
