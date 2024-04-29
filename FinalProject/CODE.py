@@ -20,6 +20,9 @@ import random
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from sklearn.metrics import accuracy_score
+import torchvision.transforms as transforms
+from sklearn.model_selection import StratifiedShuffleSplit
+
 
 '''
 Reading in JSON file and creating key for ASL Video dataset
@@ -62,7 +65,7 @@ def get_vids(path2ajpgs):
     labels = []
     for catg in listOfCats:
         path2catg = os.path.join(path2ajpgs, catg)
-        print(path2catg)
+        # print(path2catg)
         listOfSubCats = os.listdir(path2catg)
         path2subCats= [os.path.join(path2catg,los) for los in listOfSubCats]
         ids.extend(path2subCats)
@@ -91,7 +94,6 @@ unique_ids = [id_ for id_, label in zip(all_vids, all_labels) if labels_dict[lab
 unique_labels = [label for id_, label in zip(all_vids, all_labels) if labels_dict[label] < num_classes]
 # print(len(unique_ids), len(unique_labels))
 
-from sklearn.model_selection import StratifiedShuffleSplit
 
 sss = StratifiedShuffleSplit(n_splits=2, test_size=0.2, random_state=0)
 train_indx, test_indx = next(sss.split(unique_ids, unique_labels))
@@ -149,7 +151,6 @@ else:
     mean = [0.43216, 0.394666, 0.37645]
     std = [0.22803, 0.22145, 0.216989]
 
-import torchvision.transforms as transforms
 
 train_transformer = transforms.Compose([
             transforms.Resize((h,w)),
@@ -175,141 +176,142 @@ test_ds = VideoDataset(ids= test_ids, labels= test_labels, transform= test_trans
 imgs, label = test_ds[5]
 # print(imgs.shape, label, torch.min(imgs), torch.max(imgs))
 
+
 '''
+MODEL BUILDINGGGGGG
 '''
-# NOW FOR THE MODEL STUFF!!!!
-'''
-print("MODEL BUILDING!!")
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class CNNLSTM(nn.Module):
-    def __init__(self, num_classes):
-        super(CNNLSTM, self).__init__()
-        self.cnn = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=5, stride=2, padding=1),  # Larger kernel and stride
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Standard pooling
-            nn.Conv2d(16, 32, kernel_size=5, stride=2, padding=1),  # Increase to 32 filters, larger stride
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Another pooling layer
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # Further increase in channels, and stride
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Additional pooling
-            nn.Flatten()
-        )
-        # Linear layer will now need adjustment based on new output size from the CNN
-        # Assuming the input images are 224x224, calculate the output size after the last layer
-        self.fc1 = nn.Linear(self._get_conv_output((3, 224, 224)), 256)
-        self.relu = nn.ReLU()
-        self.lstm = nn.LSTM(input_size=256, hidden_size=256, num_layers=2, batch_first=True)
-        self.fc2 = nn.Linear(256, num_classes)
+import torch.nn as nn
 
-    def _get_conv_output(self, shape):
-        input = torch.rand(1, *shape)
-        output_feat = self.cnn(input)
-        n_size = output_feat.data.view(1, -1).size(1)
-        return n_size
+class TextEncoder(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim):
+        super(TextEncoder, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
 
-    def forward(self, x):
-        batch_size, timesteps, C, H, W = x.size()
-        c_out = []
-        for t in range(timesteps):
-            c_in = x[:, t, :, :, :]
-            c_out_t = self.cnn(c_in)
-            c_out_t = self.fc1(c_out_t)
-            c_out_t = self.relu(c_out_t)
-            c_out.append(c_out_t)
+    def forward(self, text_input):
+        embedded = self.embedding(text_input)
+        _, (hidden, _) = self.lstm(embedded)
+        return hidden[-1]
 
-        c_out = torch.stack(c_out, dim=1)
-        r_out, (h_n, c_n) = self.lstm(c_out)
-        out = self.fc2(r_out[:, -1, :])
-        return out
+class Generator(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(Generator, self).__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)  # Output dim is flattened image size
+
+    def forward(self, text_features, random_noise):
+        combined_input = torch.cat((text_features, random_noise), dim=1)
+        output, _ = self.lstm(combined_input)
+        video_frames = self.fc(output)
+        video_frames = video_frames.view(-1, 30, 3, 224, 224)  # reshape to video format
+        return video_frames
+
+class Discriminator(nn.Module):
+    def __init__(self, input_dim):
+        super(Discriminator, self).__init__()
+        self.lstm = nn.LSTM(input_dim, 256, batch_first=True)
+        self.fc = nn.Linear(256, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, video_frames):
+        video_frames_flat = video_frames.view(video_frames.size(0), 30, -1)  # flatten frames
+        _, (hidden, _) = self.lstm(video_frames_flat)
+        out = self.fc(hidden[-1])
+        return self.sigmoid(out)
+
+# Assuming each text has a vocabulary size of 1000, embedding dimension of 100, and hidden dimension of 256
+text_encoder = TextEncoder(vocab_size=1000, embedding_dim=100, hidden_dim=256).to(device)
+
+# Generator and Discriminator
+generator = Generator(input_dim=256, hidden_dim=512, output_dim=3*224*224*30).to(device)  # Adjust dimensions according to your setup
+discriminator = Discriminator(input_dim=3*224*224*30).to(device)  # Assuming flattened video frames
+
+# Noise dimension for generator input
+noise_dim = 100
+
+# Optimizers
+d_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+g_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+
+# Loss function
+criterion = nn.BCELoss()
+
+# Log interval for printing out metrics
+log_interval = 50
+
+num_epochs = 10
+
+from torch.nn.utils.rnn import pad_sequence
 
 def my_collate(batch):
-    # Extract frames and labels from the batch
+    # `batch` is a list of tuples where each tuple is (frames, label)
+    
+    # Separate the frames and labels
     frames, labels = zip(*batch)
-    # Pad frames to have the same sequence length
+    
+    # Assume `frames` are tensors of shape (num_frames, C, H, W)
+    # You need to pad the frames so they all have the same `num_frames`
+    # pad_sequence automatically pads the sequences to the longest sequence in the batch
     frames_padded = pad_sequence(frames, batch_first=True, padding_value=0)
-    # Stack labels into a tensor
+    
+    # Convert labels to a tensor
     labels = torch.tensor(labels)
+    
     return frames_padded, labels
 
-# Use custom collate function in DataLoader
-train_loader = DataLoader(train_ds, batch_size=16, shuffle=True, num_workers=4, collate_fn=my_collate)
-test_loader = DataLoader(test_ds, batch_size=16, shuffle=False, num_workers=4, collate_fn=my_collate)
+train_loader = DataLoader(
+    dataset=train_ds,
+    batch_size=16,
+    shuffle=True,
+    num_workers=4,
+    collate_fn=my_collate  # Here is where my_collate is used
+)
 
-model = CNNLSTM(num_classes=2000).to(device)  # Assuming num_classes is 2000
-criterion = nn.CrossEntropyLoss()  # Assuming a classification task
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-training_losses = []
-training_accuracies = []
-validation_accuracies = []
-
-print("MODEL BUILT - STARTING TRAINING!")
-num_epochs = 10  # Number of epochs
 for epoch in range(num_epochs):
-    print("Training Epoch: ", epoch+1)
-    model.train()  # Set model to training mode
-    running_loss = 0.0
-    total = 0
-    correct = 0
-    for images, labels in train_loader:
-        images, labels = images.to(device), labels.to(device)
+    for i, (videos, texts) in enumerate(train_loader):
+        # videos: real video data
+        # texts: corresponding text data
+
+        # Get text features
+        text_features = text_encoder(texts)
+
+        # Train Discriminator
+        ## Real videos
+        real_videos = videos.to(device)
+        real_labels = torch.ones(videos.size(0), 1).to(device)
         
-        # Forward pass
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+        ## Generated videos
+        noise = torch.randn(videos.size(0), noise_dim).to(device)
+        fake_videos = generator(text_features, noise).detach()  # Detach to avoid training G on these labels
+        fake_labels = torch.zeros(videos.size(0), 1).to(device)
         
-        # Backward and optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # Combine real and fake videos
+        all_videos = torch.cat([real_videos, fake_videos], dim=0)
+        all_labels = torch.cat([real_labels, fake_labels], dim=0)
         
-        running_loss += loss.item() * images.size(0)
-        _, predicted = torch.max(outputs.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+        # Discriminator output
+        discriminator_preds = discriminator(all_videos)
+        d_loss = criterion(discriminator_preds, all_labels)
 
-    epoch_loss = running_loss / len(train_loader.dataset)
-    epoch_accuracy = 100 * correct / total
-    training_losses.append(epoch_loss)
-    training_accuracies.append(epoch_accuracy)
-    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%')
+        # Backprop and optimize
+        d_optimizer.zero_grad()
+        d_loss.backward()
+        d_optimizer.step()
 
-    # Evaluate the model on the test set
-    model.eval()  # Set model to evaluation mode
-    all_predictions = []
-    all_labels = []
-    with torch.no_grad():
-        for images, labels in test_loader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
-            _, predicted = torch.max(outputs.data, 1)
-            all_predictions.extend(predicted.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
+        # Train Generator
+        noise = torch.randn(videos.size(0), noise_dim).to(device)
+        fake_videos = generator(text_features, noise)
+        fake_labels = torch.ones(videos.size(0), 1).to(device)  # Generator wants discriminator to mistake these as real
 
-    validation_accuracy = accuracy_score(all_labels, all_predictions) * 100
-    validation_accuracies.append(validation_accuracy)
-    print(f'Test Accuracy of the model on the test images: {validation_accuracy:.2f}%')
+        discriminator_preds = discriminator(fake_videos)
+        g_loss = criterion(discriminator_preds, fake_labels)
 
-# Plotting the results
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(training_losses, label='Training Loss')
-plt.title('Loss over Epochs')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
+        g_optimizer.zero_grad()
+        g_loss.backward()
+        g_optimizer.step()
+        
+        if i % log_interval == 0:
+            print("Epoch [{}/{}], Step [{}/{}], D Loss: {}, G Loss: {}".format(epoch, num_epochs, i, len(train_loader), d_loss.item(), g_loss.item()))
 
-plt.subplot(1, 2, 2)
-plt.plot(training_accuracies, label='Training Accuracy')
-plt.plot(validation_accuracies, label='Validation Accuracy')
-plt.title('Accuracy over Epochs')
-plt.xlabel('Epochs')
-plt.ylabel('Accuracy')
-plt.legend()
-
-plt.savefig('results.png')
-'''
