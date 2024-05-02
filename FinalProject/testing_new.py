@@ -18,10 +18,10 @@ Includes bounding boxes as well as class labels, etc.
 '''
 main_path = "/app/rundir/CPSC393/FinalProject/"
 
-batch_size = 64
+batch_size = 8
 num_channels = 1
 num_classes = 408
-image_size = 28
+image_size = 256
 latent_dim = 100
 
 # Reading in the JSON file
@@ -114,21 +114,27 @@ def load_video_data_and_labels(directory, bbox_df, label_dict):
                 labels.append(label_dict.get(category, -1))
     return np.array(video_data, dtype=object), np.array(labels)
 
-print("Loading in images and labels...")
+print("1. Loading in images and labels...")
 video_data, labels= load_video_data_and_labels(main_path + 'images/', bbox_df, label_dict)
+
+print("2. Creating a ragged dataset")
 video_data = tf.ragged.constant(video_data, dtype=tf.float32)
+
+print("3. Creating labels")
 labels = tf.constant(labels, dtype=tf.int32)
 
-print("Loading dataset creation...")
+print("4. Loading dataset creation...")
 dataset = tf.data.Dataset.from_tensor_slices((video_data, labels))
 dataset = dataset.shuffle(buffer_size=1024).batch(batch_size)
 
 # Example of preparing one-hot labels
+print("5. Grabbing number of classes")
 num_classes = len(label_dict)  # Total number of classes
 labels_one_hot = tf.one_hot(labels, depth=num_classes)
 print(num_classes)
 
 # Prepare dataset
+print("6. Creating the video_dataset")
 video_dataset = tf.data.Dataset.from_tensor_slices((video_data, labels_one_hot))
 video_dataset = video_dataset.shuffle(buffer_size=1024).batch(batch_size)
 
@@ -221,7 +227,7 @@ cond_gan.compile(
     loss_fn=keras.losses.BinaryCrossentropy()
 )
 
-print("Training the model...")
+print("7. Training the model...")
 # Fit the model
 cond_gan.fit(dataset, epochs=30)
 cond_gan.save('generator_model.h5')
@@ -229,7 +235,7 @@ cond_gan.save('generator_model.h5')
 '''
 MAKING GENERATED IMAGES!!!
 '''
-print("Making images...")
+print("8. Making images...")
 # Load the saved generator model
 def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
     """
