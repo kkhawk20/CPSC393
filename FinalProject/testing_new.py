@@ -255,7 +255,7 @@ def build_generator(latent_dim, seq_length=16, height=256, width=256, channels=3
         layers.BatchNormalization(),
 
         # Final Conv2DTranspose to get to the correct channel size, still single frame
-        layers.Conv2DTranspose(channels, (5, 5), strides=(2, 2), padding='same', activation='sigmoid'),
+        layers.Conv2DTranspose(channels, (5, 5), strides=(2, 2), padding='same'),
 
         # Reshape output to introduce the sequence dimension
         layers.Reshape((height, width, channels)),
@@ -272,7 +272,7 @@ def build_discriminator(seq_length=16, height=256, width=256, channels=3):
         TimeDistributed(Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu")),
         ConvLSTM2D(128, (3, 3), return_sequences=False, padding="same"),
         Flatten(),
-        Dense(1, activation='sigmoid')
+        Dense(1)
     ])
     return model
 
@@ -282,46 +282,50 @@ class ConditionalGAN(keras.Model):
         self.discriminator = discriminator
         self.generator = generator
         self.latent_dim = latent_dim
+        self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
+        self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
 
-    def compile(self, d_optimizer, g_optimizer, loss_fn):
+    def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
         super(ConditionalGAN, self).compile()
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
-        self.loss_fn = loss_fn
+        self.d_loss_fn = d_loss_fn
+        self.g_loss_fn = g_loss_fn
 
     def train_step(self, data):
-        real_videos, labels = data  # real_videos should be [batch_size, seq_length, height, width, channels]
+        real_videos, labels = data
         batch_size = tf.shape(real_videos)[0]
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
-        # Generate fake videos
-        generated_videos = self.generator(random_latent_vectors)
-
-        # Combine real and generated videos for the discriminator
-        combined_videos = tf.concat([generated_videos, real_videos], axis=0)
-        combined_labels = tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 1))], axis=0)
-
-        # Train discriminator
+        # Train Discriminator
         with tf.GradientTape() as disc_tape:
-            disc_predictions = self.discriminator(combined_videos)
-            d_loss = self.loss_fn(combined_labels, disc_predictions)
+            generated_videos = self.generator(random_latent_vectors, training=True)
+            real_predictions = self.discriminator(real_videos, training=True)
+            fake_predictions = self.discriminator(generated_videos, training=True)
 
-        disc_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
-        self.d_optimizer.apply_gradients(zip(disc_grads, self.discriminator.trainable_weights))
+            d_loss_real = self.d_loss_fn(tf.ones_like(real_predictions), real_predictions)
+            d_loss_fake = self.d_loss_fn(tf.zeros_like(fake_predictions), fake_predictions)
+            d_loss = d_loss_real + d_loss_fake
 
-        # Misleading labels for generator training (trying to fool the discriminator)
-        misleading_labels = tf.ones((batch_size, 1))
+        # Calculate gradients for discriminator
+        d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
+        self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
 
-        # Train generator (only through generator gradients)
+        # Train Generator
         with tf.GradientTape() as gen_tape:
-            fake_predictions = self.discriminator(generated_videos)
-            g_loss = self.loss_fn(misleading_labels, fake_predictions)
+            generated_videos = self.generator(random_latent_vectors, training=True)
+            fake_predictions = self.discriminator(generated_videos, training=True)
+            g_loss = self.g_loss_fn(fake_predictions)
 
-        gen_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
-        self.g_optimizer.apply_gradients(zip(gen_grads, self.generator.trainable_weights))
+        # Calculate gradients for generator
+        g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
+        self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        return {"d_loss": d_loss, "g_loss": g_loss}
-    
+        self.d_loss_tracker.update_state(d_loss)
+        self.g_loss_tracker.update_state(g_loss)
+
+        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
+
 # Build generator
 try:
     generator = build_generator(latent_dim=100)
@@ -336,66 +340,82 @@ try:
 except Exception as e:
     print("Failed to build discriminator:", e)
 
+# Custom loss functions for the discriminator and generator
+def discriminator_loss(real_output, fake_output):
+    smooth_positive_labels = 0.9  # Soft label for "real"
+    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output) * smooth_positive_labels, real_output, from_logits=True)
+    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output, from_logits=True)
+    return real_loss + fake_loss
+
+def generator_loss(fake_output):
+    return tf.keras.losses.BinaryCrossentropy(from_logits=True)(tf.ones_like(fake_output), fake_output)
+
 # Instantiate and compile the Conditional GAN
 try:
     cond_gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
     cond_gan.compile(
         d_optimizer=keras.optimizers.Adam(learning_rate=0.0002),
         g_optimizer=keras.optimizers.Adam(learning_rate=0.0002),
-        loss_fn=keras.losses.BinaryCrossentropy()
+        d_loss_fn=discriminator_loss,
+        g_loss_fn=generator_loss
     )
     print("Conditional GAN built and compiled successfully.")
 except Exception as e:
     print("Failed to instantiate or compile Conditional GAN:", e)
 
 print(" ~~~~~~~~~~ Training the model ~~~~~~~~~~~~~")
+
 # Fit the model
-cond_gan.fit(dataset, epochs=30)
-cond_gan.save('generator_model.h5')
+cond_gan.fit(dataset, epochs=1)
+cond_gan.save('generator_model', save_format='tf')
+cond_gan.save_weights('generator_weights.h5')
+
 
 '''
 MAKING GENERATED IMAGES!!!
 '''
-print("~~~~~~~~~~ Making images ~~~~~~~~~~")
-# Load the saved generator model
-def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
-    """
-    Generate and plot a grid of images for a specific word.
-    Args:
-    - generator: The trained generator model.
-    - word: The word to generate signs for.
-    - label_dict: Dictionary of word to label mappings.
-    - num_images: Number of images to generate.
-    - grid_dim: Tuple indicating grid dimensions (rows, columns).
-    """
-    if word not in label_dict:
-        print(f"Word '{word}' not found in label dictionary.")
-        return
 
-    word_label = label_dict[word]
-    num_classes = max(label_dict.values()) + 1  # Assuming labels start from 0
-    label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
-    noise = tf.random.normal([num_images, 100])  # Assuming noise dimension is 100
+# print("~~~~~~~~~~ Making images ~~~~~~~~~~")
+# # Load the saved generator model
+# def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
+#     """
+#     Generate and plot a grid of images for a specific word.
+#     Args:
+#     - generator: The trained generator model.
+#     - word: The word to generate signs for.
+#     - label_dict: Dictionary of word to label mappings.
+#     - num_images: Number of images to generate.
+#     - grid_dim: Tuple indicating grid dimensions (rows, columns).
+#     """
+#     if word not in label_dict:
+#         print(f"Word '{word}' not found in label dictionary.")
+#         return
 
-    # Generate images
-    inputs = tf.concat([noise, label_one_hot], axis=1)
-    images = generator.predict(inputs)
+#     word_label = label_dict[word]
+#     num_classes = max(label_dict.values()) + 1  # Assuming labels start from 0
+#     label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+#     noise = tf.random.normal([num_images, 100])  # Assuming noise dimension is 100
 
-    # Rescale images to [0, 255]
-    images = (images * 255).astype(np.uint8)
+#     # Generate images
+#     inputs = tf.concat([noise, label_one_hot], axis=1)
+#     images = generator.predict(inputs)
 
-    # Plot images in a grid
-    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
-    axes = axes.flatten() if num_images > 1 else [axes]
+#     # Rescale images to [0, 255]
+#     images = (images * 255).astype(np.uint8)
 
-    for img, ax in zip(images, axes):
-        ax.imshow(img.reshape(256, 256, 3))  # Adjust the shape based on your model's output
-        ax.axis('off')
+#     # Plot images in a grid
+#     fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
+#     axes = axes.flatten() if num_images > 1 else [axes]
 
-    plt.tight_layout()
-    plt.savefig('generated_images.png')
+#     for img, ax in zip(images, axes):
+#         ax.imshow(img.reshape(256, 256, 3))  # Adjust the shape based on your model's output
+#         ax.axis('off')
 
-# Example usage
-generator = load_model("generator_model.h5")  # Load your trained generator model
-word = 'able'  # Example ASL word
-generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))
+#     plt.tight_layout()
+#     plt.savefig('generated_images.png')
+
+# # Example usage
+# cond_gan.load_weights('generator_weights.h5')
+# generator = load_model("generator_model.h5")  # Load your trained generator model
+# word = 'able'  # Example ASL word
+# generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))
