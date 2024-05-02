@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import ConvLSTM2D, BatchNormalization, Conv2DTranspose, TimeDistributed, Conv2D, Flatten, Dense
+from tensorflow.keras.layers import ConvLSTM2D,LSTM,  BatchNormalization, Conv2DTranspose, TimeDistributed, Conv2D, Flatten, Dense
 import numpy as np
 import cv2
 import os
@@ -262,18 +262,23 @@ def build_generator(latent_dim, seq_length=16, height=256, width=256, channels=3
         # Replicate this frame to form a sequence of identical frames
         layers.Lambda(lambda x: tf.repeat(tf.expand_dims(x, axis=1), repeats=seq_length, axis=1))
     ])
+    model.build((None, latent_dim))
     return model
 
 def build_discriminator(seq_length=16, height=256, width=256, channels=3):
     model = keras.Sequential([
         keras.Input(shape=(seq_length, height, width, channels)),
         TimeDistributed(Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")),
-        ConvLSTM2D(64, (3, 3), return_sequences=True, padding="same"),
         TimeDistributed(Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu")),
-        ConvLSTM2D(128, (3, 3), return_sequences=False, padding="same"),
+
+        TimeDistributed(Flatten()),
+
+        LSTM(128, return_sequences = False),
+
         Flatten(),
         Dense(1)
     ])
+    model.build((None, seq_length, height, width, channels))
     return model
 
 class ConditionalGAN(keras.Model):
@@ -369,7 +374,6 @@ print(" ~~~~~~~~~~ Training the model ~~~~~~~~~~~~~")
 cond_gan.fit(dataset, epochs=1)
 cond_gan.save('generator_model', save_format='tf')
 cond_gan.save_weights('generator_weights.h5')
-
 
 '''
 MAKING GENERATED IMAGES!!!
