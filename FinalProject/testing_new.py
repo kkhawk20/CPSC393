@@ -88,25 +88,6 @@ def load_and_process_frame(frame_file, video_id, bbox_df):
         print(f"Error processing {frame_file}: {e}")
         return None
 
-# def load_video_data_and_labels(directory, bbox_df, label_dict):
-#     video_data = []
-#     labels = []
-#     for category in os.listdir(directory):
-#         category_path = os.path.join(directory, category)
-#         if not os.path.isdir(category_path):
-#             continue
-#         for video_id in os.listdir(category_path):
-#             video_id_path = os.path.join(category_path, video_id)
-#             if not os.path.isdir(video_id_path):
-#                 continue
-#             frame_files = sorted([os.path.join(video_id_path, f) for f in os.listdir(video_id_path) if f.endswith('.jpg')])
-#             video_frames = [load_and_process_frame(frame_file, video_id, bbox_df) for frame_file in frame_files]
-#             video_frames = [f for f in video_frames if f is not None]  # Filter out failed loads
-#             if video_frames:  # Ensure there are frames
-#                 video_data.append(np.stack(video_frames))
-#                 labels.append(label_dict.get(category, -1))
-#     return np.array(video_data, dtype=object), np.array(labels)
-
 # modified for testing
 def load_video_data_and_labels(directory, bbox_df, label_dict, max_frames=16, max_videos=20):
     video_data = []
@@ -262,7 +243,6 @@ def build_generator(latent_dim, seq_length=16, height=256, width=256, channels=3
         # Replicate this frame to form a sequence of identical frames
         layers.Lambda(lambda x: tf.repeat(tf.expand_dims(x, axis=1), repeats=seq_length, axis=1))
     ])
-    model.build((None, latent_dim))
     return model
 
 def build_discriminator(seq_length=16, height=256, width=256, channels=3):
@@ -278,7 +258,6 @@ def build_discriminator(seq_length=16, height=256, width=256, channels=3):
         Flatten(),
         Dense(1)
     ])
-    model.build((None, seq_length, height, width, channels))
     return model
 
 class ConditionalGAN(keras.Model):
@@ -289,6 +268,20 @@ class ConditionalGAN(keras.Model):
         self.latent_dim = latent_dim
         self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
         self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
+
+    def call(self, inputs, training=False):
+        # Generate fake videos from random latent vectors
+        random_latent_vectors = tf.random.normal(shape=(tf.shape(inputs)[0], self.latent_dim))
+        generated_videos = self.generator(random_latent_vectors, training=training)
+        
+        # In training mode, return both real and fake outputs for loss computation
+        if training:
+            real_outputs = self.discriminator(inputs, training=True)
+            fake_outputs = self.discriminator(generated_videos, training=True)
+            return real_outputs, fake_outputs
+        else:
+            # During inference, just return the generated videos
+            return generated_videos
 
     def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
         super(ConditionalGAN, self).compile()
@@ -359,8 +352,8 @@ def generator_loss(fake_output):
 try:
     cond_gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
     cond_gan.compile(
-        d_optimizer=keras.optimizers.Adam(learning_rate=0.0002),
-        g_optimizer=keras.optimizers.Adam(learning_rate=0.0002),
+        d_optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+        g_optimizer=keras.optimizers.Adam(learning_rate=1e-4),
         d_loss_fn=discriminator_loss,
         g_loss_fn=generator_loss
     )
@@ -370,10 +363,41 @@ except Exception as e:
 
 print(" ~~~~~~~~~~ Training the model ~~~~~~~~~~~~~")
 
-# Fit the model
-cond_gan.fit(dataset, epochs=1)
-cond_gan.save('generator_model', save_format='tf')
-cond_gan.save_weights('generator_weights.h5')
+# Ensure the generator can process an input
+dummy_latent = tf.random.normal([batch_size, latent_dim])
+_ = generator(dummy_latent)
+
+# Ensure the discriminator can handle its expected input shape
+dummy_video = tf.random.normal([batch_size, 16, 256, 256, 3])  # Adjust based on your discriminator's input requirements
+_ = discriminator(dummy_video)
+
+cond_gan.train_step((dummy_video, dummy_latent))
+
+# Setup model checkpointing
+checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+    'gan_checkpoint.h5', save_weights_only=True, save_best_only=True, monitor='d_loss', mode='min'
+)
+
+# manual build of Conditional GAN since automatic methods fail
+cond_gan.build(input_shape=(None, 16, 256, 256, 3))  # Modify as per actual expected input shape
+cond_gan.summary()  # Check outputs
+
+# Check build status and perform a training step
+print("Conditional GAN built:", cond_gan.built)
+cond_gan.train_step((dummy_video, None))  # This should ideally not be needed after build() but just to confirm
+
+# Fit the model with actual data
+if cond_gan.built:
+    print("Model is built")
+    cond_gan.fit(dataset, epochs=1)
+else:
+    print("Model is still not built")
+
+
+
+
+
+
 
 '''
 MAKING GENERATED IMAGES!!!
