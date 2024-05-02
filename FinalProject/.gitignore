@@ -2,3 +2,4 @@
 /images/
 /logs/
 /training_checkpoints/
+/gan_checkpoint.h5/
