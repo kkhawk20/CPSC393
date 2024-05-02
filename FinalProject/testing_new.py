@@ -375,10 +375,30 @@ cond_gan.train_step((dummy_video, dummy_latent))
 
 # Setup model checkpointing
 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    'gan_checkpoint.h5', save_weights_only=True, save_best_only=True, monitor='d_loss', mode='min'
+    'gan_checkpoint.h5', save_weights_only=True, 
+    save_best_only=True, monitor='g_loss', mode='min'
 )
 
-# manual build of Conditional GAN since automatic methods fail
+# Early stopping callback
+early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+    monitor='g_loss', patience=20, restore_best_weights=True,
+    mode='min'
+)
+
+# if cond_gan.built:
+#     print("Model is built")
+#     cond_gan.fit(dataset, epochs=1, callbacks=[checkpoint_callback, early_stopping_callback])
+# else:
+#     print("Model is not built")
+
+# Check the first batch from the dataset to ensure it matches expected shapes
+# for x, y in dataset.take(1):
+#     print("Batch data shape:", x.shape)
+#     print("Batch label shape:", y.shape)
+#     break  # Only check the first batch
+
+
+# Try a manual build of Conditional GAN if automatic methods fail
 cond_gan.build(input_shape=(None, 16, 256, 256, 3))  # Modify as per actual expected input shape
 cond_gan.summary()  # Check outputs
 
@@ -389,61 +409,47 @@ cond_gan.train_step((dummy_video, None))  # This should ideally not be needed af
 # Fit the model with actual data
 if cond_gan.built:
     print("Model is built")
-    cond_gan.fit(dataset, epochs=1)
+    cond_gan.fit(dataset, epochs=1000, 
+                 callbacks=[checkpoint_callback, early_stopping_callback])
+    generator.save_weights('generator_weights.h5')
+    discriminator.save_weights('discriminator_weights.h5')
+    generator.save('generator_model.h5')
 else:
     print("Model is still not built")
-
-
-
-
-
-
 
 '''
 MAKING GENERATED IMAGES!!!
 '''
 
 # print("~~~~~~~~~~ Making images ~~~~~~~~~~")
-# # Load the saved generator model
-# def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
-#     """
-#     Generate and plot a grid of images for a specific word.
-#     Args:
-#     - generator: The trained generator model.
-#     - word: The word to generate signs for.
-#     - label_dict: Dictionary of word to label mappings.
-#     - num_images: Number of images to generate.
-#     - grid_dim: Tuple indicating grid dimensions (rows, columns).
-#     """
-#     if word not in label_dict:
-#         print(f"Word '{word}' not found in label dictionary.")
-#         return
+# Load the saved generator model
+def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
+    if word not in label_dict:
+        print(f"Word '{word}' not found in label dictionary.")
+        return
 
-#     word_label = label_dict[word]
-#     num_classes = max(label_dict.values()) + 1  # Assuming labels start from 0
-#     label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
-#     noise = tf.random.normal([num_images, 100])  # Assuming noise dimension is 100
+    word_label = label_dict[word]
+    num_classes = max(label_dict.values()) + 1  # Assuming labels start from 0
+    label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+    noise = tf.random.normal([num_images, 100])  # Assuming noise dimension is 100
 
-#     # Generate images
-#     inputs = tf.concat([noise, label_one_hot], axis=1)
-#     images = generator.predict(inputs)
+    # Generate images
+    inputs = tf.concat([noise, label_one_hot], axis=1)
+    images = generator(inputs, training=False)  # Ensure to call generator correctly
 
-#     # Rescale images to [0, 255]
-#     images = (images * 255).astype(np.uint8)
+    # Rescale images to [0, 255] and adjust dimensions if necessary
+    images = (images.numpy() * 255).astype(np.uint8)
+    images = images.reshape(-1, 256, 256, 3)  # Adjust shape if your generator outputs differently
 
-#     # Plot images in a grid
-#     fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
-#     axes = axes.flatten() if num_images > 1 else [axes]
+    # Plot images in a grid
+    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
+    axes = axes.flatten() if num_images > 1 else [axes]
+    for img, ax in zip(images, axes):
+        ax.imshow(img)
+        ax.axis('off')
+    plt.tight_layout()
+    plt.savefig('generated_images.png')
 
-#     for img, ax in zip(images, axes):
-#         ax.imshow(img.reshape(256, 256, 3))  # Adjust the shape based on your model's output
-#         ax.axis('off')
-
-#     plt.tight_layout()
-#     plt.savefig('generated_images.png')
-
-# # Example usage
-# cond_gan.load_weights('generator_weights.h5')
-# generator = load_model("generator_model.h5")  # Load your trained generator model
-# word = 'able'  # Example ASL word
-# generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))
+generator = load_model("generator_model.h5")  # Load your trained generator model
+word = 'able'  # Example ASL word
+generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))
