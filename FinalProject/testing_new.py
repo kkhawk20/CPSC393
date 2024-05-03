@@ -14,6 +14,7 @@ from tensorflow.keras.utils import Sequence
 import cv2
 import numpy as np
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TensorFlow logs (1 = INFO, 2 = WARNING, 3 = ERROR)
+tf.config.optimizer.set_jit(False)  # Disable the Just-In-Time compilation optimization.
 
 # Clear the TensorFlow session
 tf.keras.backend.clear_session()
@@ -141,6 +142,9 @@ def load_video_data(directory, label_dict):
                 labels.append(label_dict.get(category, -1))  # Default to -1 if category not in dictionary
     return video_files, labels
 
+'''
+Creating a generator for the video data, which will load and process each set of videos (sequence of frames)
+'''
 class VideoDataGenerator(Sequence):
     def __init__(self, video_files, labels, batch_size, max_frames=16, n_channels=3, n_classes=408, shuffle=True):
         'Initialization'
@@ -217,32 +221,36 @@ dataset = tf.data.Dataset.from_generator(
     output_shapes=([train_gen.batch_size, train_gen.max_frames, 256, 256, 3], [train_gen.batch_size, train_gen.n_classes])
 )
 
-def build_generator(latent_dim, seq_length=16, height=256, width=256, channels=3):
-    model = keras.Sequential([
-        # Start from a latent dimension
-        keras.Input(shape=(latent_dim,)),
-        # First Dense layer to create a suitable number of features
-        layers.Dense(8 * 8 * 256, activation="relu"),
-        layers.Reshape((8, 8, 256)),  # Reshape to small spatial dimensions but with many features
+'''
+MODEL BUILDING
+Generator (Takes in noise and label as input)
+Discriminator (Takes in video frames as input)
+'''
+def build_generator(latent_dim, num_classes, seq_length=16, height=256, width=256, channels=3):
+    noise_input = keras.Input(shape=(latent_dim,))
+    label_input = keras.Input(shape=(num_classes,))
+    concat_input = layers.Concatenate()([noise_input, label_input])
 
-        # Use Conv2DTranspose to upscale to the desired spatial dimensions
-        layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same', activation='relu'),
-        layers.BatchNormalization(),
+    # Dense layer to expand the input
+    x = layers.Dense(8*8*512, activation='relu')(concat_input)
+    x = layers.Reshape((8, 8, 512))(x)
 
-        # Final Conv2DTranspose to get to the correct channel size, still single frame
-        layers.Conv2DTranspose(channels, (5, 5), strides=(2, 2), padding='same'),
+    # Transposed convolutions to upscale to the desired dimensions
+    x = layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same', activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Conv2DTranspose(channels, (5, 5), strides=(2, 2), padding='same', activation='sigmoid')(x)  # Ensure this final layer reaches 256x256
 
-        # Reshape output to introduce the sequence dimension
-        layers.Reshape((height, width, channels)),
-        # Replicate this frame to form a sequence of identical frames
-        layers.Lambda(lambda x: tf.repeat(tf.expand_dims(x, axis=1), repeats=seq_length, axis=1))
-    ])
+    # Replicating the frame to form a sequence
+    x = layers.Reshape((height, width, channels))(x)
+    x = layers.Lambda(lambda x: tf.repeat(tf.expand_dims(x, axis=1), repeats=seq_length, axis=1))(x)
+
+    model = keras.Model(inputs=[noise_input, label_input], outputs=x)
     return model
 
 def build_discriminator(seq_length=16, height=256, width=256, channels=3):
@@ -270,18 +278,23 @@ class ConditionalGAN(keras.Model):
         self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
 
     def call(self, inputs, training=False):
-        # Generate fake videos from random latent vectors
-        random_latent_vectors = tf.random.normal(shape=(tf.shape(inputs)[0], self.latent_dim))
-        generated_videos = self.generator(random_latent_vectors, training=training)
-        
-        # In training mode, return both real and fake outputs for loss computation
+        # inputs should be a list with two elements: [noise_input, label_input]
+        if isinstance(inputs, list) and len(inputs) == 2:
+            noise_input = inputs[0]
+            label_input = inputs[1]
+        else:
+            raise ValueError("Expected inputs to be a list of [noise_input, label_input]")
+
+        generated_videos = self.generator([noise_input, label_input], training=training)
+
         if training:
-            real_outputs = self.discriminator(inputs, training=True)
+            real_inputs = inputs[0]  # Assuming real inputs (videos) are passed as the first part of the input during training
+            real_outputs = self.discriminator(real_inputs, training=True)
             fake_outputs = self.discriminator(generated_videos, training=True)
             return real_outputs, fake_outputs
         else:
-            # During inference, just return the generated videos
             return generated_videos
+
 
     def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
         super(ConditionalGAN, self).compile()
@@ -291,52 +304,35 @@ class ConditionalGAN(keras.Model):
         self.g_loss_fn = g_loss_fn
 
     def train_step(self, data):
-        real_videos, labels = data
+        real_videos, _ = data  # Ignore labels from the dataset for discriminator training
         batch_size = tf.shape(real_videos)[0]
+
+        # Generating random labels for fake video generation
+        random_labels = tf.random.uniform((batch_size,), minval=0, maxval=num_classes, dtype=tf.int32)
+        label_one_hot = tf.one_hot(random_labels, depth=num_classes)
+
+        # Generating random latent vectors
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
         # Train Discriminator
-        with tf.GradientTape() as disc_tape:
-            generated_videos = self.generator(random_latent_vectors, training=True)
+        with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
+            generated_videos = self.generator([random_latent_vectors, label_one_hot], training=True)
             real_predictions = self.discriminator(real_videos, training=True)
             fake_predictions = self.discriminator(generated_videos, training=True)
-
             d_loss_real = self.d_loss_fn(tf.ones_like(real_predictions), real_predictions)
             d_loss_fake = self.d_loss_fn(tf.zeros_like(fake_predictions), fake_predictions)
             d_loss = d_loss_real + d_loss_fake
-
-        # Calculate gradients for discriminator
-        d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
-        self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
-
-        # Train Generator
-        with tf.GradientTape() as gen_tape:
-            generated_videos = self.generator(random_latent_vectors, training=True)
-            fake_predictions = self.discriminator(generated_videos, training=True)
             g_loss = self.g_loss_fn(fake_predictions)
 
-        # Calculate gradients for generator
+        # Gradient computation
+        d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
+
+        # Apply gradients
+        self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        self.d_loss_tracker.update_state(d_loss)
-        self.g_loss_tracker.update_state(g_loss)
-
-        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
-
-# Build generator
-try:
-    generator = build_generator(latent_dim=100)
-    print("Generator built successfully.")
-except Exception as e:
-    print("Failed to build generator:", e)
-
-# Build discriminator
-try:
-    discriminator = build_discriminator()
-    print("Discriminator built successfully.")
-except Exception as e:
-    print("Failed to build discriminator:", e)
+        return {"d_loss": d_loss, "g_loss": g_loss}
 
 # Custom loss functions for the discriminator and generator
 def discriminator_loss(real_output, fake_output):
@@ -347,6 +343,24 @@ def discriminator_loss(real_output, fake_output):
 
 def generator_loss(fake_output):
     return tf.keras.losses.BinaryCrossentropy(from_logits=True)(tf.ones_like(fake_output), fake_output)
+
+
+'''
+TRAINING MODEL LOGIC & PLAN! 
+'''
+# Build generator
+try:
+    generator = build_generator(latent_dim=latent_dim, num_classes=num_classes)
+    print("Generator built successfully.")
+except Exception as e:
+    print("Failed to build generator:", e)
+
+# Build discriminator
+try:
+    discriminator = build_discriminator()
+    print("Discriminator built successfully.")
+except Exception as e:
+    print("Failed to build discriminator:", e)
 
 # Instantiate and compile the Conditional GAN
 try:
@@ -364,14 +378,15 @@ except Exception as e:
 print(" ~~~~~~~~~~ Training the model ~~~~~~~~~~~~~")
 
 # Ensure the generator can process an input
-dummy_latent = tf.random.normal([batch_size, latent_dim])
-_ = generator(dummy_latent)
+test_noise = tf.random.normal([1, latent_dim])
+test_label = tf.one_hot([3], depth=num_classes)  # Example label
+_ = generator([test_noise, test_label])
 
 # Ensure the discriminator can handle its expected input shape
 dummy_video = tf.random.normal([batch_size, 16, 256, 256, 3])  # Adjust based on your discriminator's input requirements
 _ = discriminator(dummy_video)
 
-cond_gan.train_step((dummy_video, dummy_latent))
+cond_gan.train_step((dummy_video, [test_noise, test_label]))
 
 # Setup model checkpointing
 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
@@ -385,29 +400,23 @@ early_stopping_callback = tf.keras.callbacks.EarlyStopping(
     mode='min'
 )
 
-# if cond_gan.built:
-#     print("Model is built")
-#     cond_gan.fit(dataset, epochs=1, callbacks=[checkpoint_callback, early_stopping_callback])
-# else:
-#     print("Model is not built")
+# Example of setting up shapes for noise and labels
+noise_shape = (None, latent_dim)
+label_shape = (None, num_classes)
 
-# Check the first batch from the dataset to ensure it matches expected shapes
-# for x, y in dataset.take(1):
-#     print("Batch data shape:", x.shape)
-#     print("Batch label shape:", y.shape)
-#     break  # Only check the first batch
+# Build the model manually for these input shapes
+cond_gan.build([noise_shape, label_shape])
 
-
-# Try a manual build of Conditional GAN if automatic methods fail
-cond_gan.build(input_shape=(None, 16, 256, 256, 3))  # Modify as per actual expected input shape
-cond_gan.summary()  # Check outputs
+# Now call summary
+cond_gan.summary()
 
 # Check build status and perform a training step
 print("Conditional GAN built:", cond_gan.built)
 cond_gan.train_step((dummy_video, None))  # This should ideally not be needed after build() but just to confirm
 
+retrain = True
 # Fit the model with actual data
-if cond_gan.built:
+if cond_gan.built and retrain:
     print("Model is built")
     cond_gan.fit(dataset, epochs=1000, 
                  callbacks=[checkpoint_callback, early_stopping_callback])
@@ -415,41 +424,31 @@ if cond_gan.built:
     discriminator.save_weights('discriminator_weights.h5')
     generator.save('generator_model.h5')
 else:
-    print("Model is still not built")
+    print("Model is still not built or you dont want to retrain it...")
+
 
 '''
 MAKING GENERATED IMAGES!!!
 '''
-
-# print("~~~~~~~~~~ Making images ~~~~~~~~~~")
+print("~~~~~~~~~~ Making images ~~~~~~~~~~")
 # Load the saved generator model
-def generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5)):
+def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=5, grid_dim=(1, 5)):
     if word not in label_dict:
         print(f"Word '{word}' not found in label dictionary.")
         return
-
     word_label = label_dict[word]
-    num_classes = max(label_dict.values()) + 1  # Assuming labels start from 0
-    label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
-    noise = tf.random.normal([num_images, 100])  # Assuming noise dimension is 100
-
-    # Generate images
-    inputs = tf.concat([noise, label_one_hot], axis=1)
-    images = generator(inputs, training=False)  # Ensure to call generator correctly
-
-    # Rescale images to [0, 255] and adjust dimensions if necessary
-    images = (images.numpy() * 255).astype(np.uint8)
-    images = images.reshape(-1, 256, 256, 3)  # Adjust shape if your generator outputs differently
-
-    # Plot images in a grid
+    noise = tf.random.normal([num_images, latent_dim])
+    label_one_hot = tf.one_hot([word_label] * num_images, depth=max(label_dict.values()) + 1)
+    inputs = [noise, label_one_hot]
+    images = generator.predict(inputs, batch_size=num_images)
+    images = (images * 255).astype(np.uint8).reshape(-1, 256, 256, 3)
     fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
-    axes = axes.flatten() if num_images > 1 else [axes]
-    for img, ax in zip(images, axes):
+    for img, ax in zip(images, axes.flatten()):
         ax.imshow(img)
         ax.axis('off')
     plt.tight_layout()
     plt.savefig('generated_images.png')
 
-generator = load_model("generator_model.h5")  # Load your trained generator model
+generator = load_model("generator_model.h5", compile=False)
 word = 'able'  # Example ASL word
 generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))

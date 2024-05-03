@@ -2,4 +2,8 @@
 /images/
 /logs/
 /training_checkpoints/
-/gan_checkpoint.h5/
+gan_checkpoint.h5
+discriminator_weights.h5
+generator_weights.h5
+generator_model.h5
+/__pycache__/
