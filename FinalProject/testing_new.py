@@ -414,7 +414,7 @@ cond_gan.summary()
 print("Conditional GAN built:", cond_gan.built)
 cond_gan.train_step((dummy_video, None))  # This should ideally not be needed after build() but just to confirm
 
-retrain = True
+retrain = False
 # Fit the model with actual data
 if cond_gan.built and retrain:
     print("Model is built")
@@ -426,29 +426,39 @@ if cond_gan.built and retrain:
 else:
     print("Model is still not built or you dont want to retrain it...")
 
-
 '''
 MAKING GENERATED IMAGES!!!
 '''
 print("~~~~~~~~~~ Making images ~~~~~~~~~~")
-# Load the saved generator model
-def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=5, grid_dim=(1, 5)):
+
+def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5)):
+    # Ensure the word is in the dictionary
     if word not in label_dict:
         print(f"Word '{word}' not found in label dictionary.")
         return
+
     word_label = label_dict[word]
+    num_classes = max(label_dict.values()) + 1  # Get the number of classes
+
+    # Create random noise and one-hot labels
     noise = tf.random.normal([num_images, latent_dim])
-    label_one_hot = tf.one_hot([word_label] * num_images, depth=max(label_dict.values()) + 1)
+    label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+
+    # Generate images
     inputs = [noise, label_one_hot]
     images = generator.predict(inputs, batch_size=num_images)
-    images = (images * 255).astype(np.uint8).reshape(-1, 256, 256, 3)
-    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 3))
+    images = (images * 255).astype(np.uint8)
+
+    # Create a grid of images
+    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 6))
     for img, ax in zip(images, axes.flatten()):
         ax.imshow(img)
         ax.axis('off')
+
     plt.tight_layout()
-    plt.savefig('generated_images.png')
+    plt.savefig('generated_images_grid.png')
+    plt.show()
 
 generator = load_model("generator_model.h5", compile=False)
 word = 'able'  # Example ASL word
-generate_and_plot_images(generator, word, label_dict, num_images=5, grid_dim=(1, 5))
+generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5))
