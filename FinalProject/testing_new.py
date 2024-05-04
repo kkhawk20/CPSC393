@@ -30,7 +30,7 @@ batch_size = 2
 num_channels = 1
 num_classes = 408
 image_size = 256
-latent_dim = 100
+latent_dim = 408
 
 # Reading in the JSON file
 with open(main_path + 'WLASL_v0.3.json', 'r') as data_file:
@@ -414,7 +414,7 @@ cond_gan.summary()
 print("Conditional GAN built:", cond_gan.built)
 cond_gan.train_step((dummy_video, None))  # This should ideally not be needed after build() but just to confirm
 
-retrain = False
+retrain = True
 # Fit the model with actual data
 if cond_gan.built and retrain:
     print("Model is built")
@@ -431,34 +431,47 @@ MAKING GENERATED IMAGES!!!
 '''
 print("~~~~~~~~~~ Making images ~~~~~~~~~~")
 
-def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5)):
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import numpy as np
+from tensorflow.keras.models import load_model
+
+def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5), fileName = "generated_images.png"):
     # Ensure the word is in the dictionary
     if word not in label_dict:
         print(f"Word '{word}' not found in label dictionary.")
         return
 
     word_label = label_dict[word]
-    num_classes = max(label_dict.values()) + 1  # Get the number of classes
+    num_classes = max(label_dict.values()) # Calculate correct number of classes
 
     # Create random noise and one-hot labels
     noise = tf.random.normal([num_images, latent_dim])
     label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+
+    # Validate shapes
+    print(f"Noise shape: {tf.shape(noise)}, Label shape: {tf.shape(label_one_hot)}")
 
     # Generate images
     inputs = [noise, label_one_hot]
     images = generator.predict(inputs, batch_size=num_images)
     images = (images * 255).astype(np.uint8)
 
+    images = images[0]  # Assuming only one batch and selecting the first video's frames
+
     # Create a grid of images
-    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 6))
+    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
     for img, ax in zip(images, axes.flatten()):
         ax.imshow(img)
         ax.axis('off')
 
     plt.tight_layout()
-    plt.savefig('generated_images_grid.png')
-    plt.show()
+    plt.savefig(fileName)
 
+# Load generator model
 generator = load_model("generator_model.h5", compile=False)
-word = 'able'  # Example ASL word
-generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5))
+
+word_list = ['tired', 'still']
+for word in word_list:
+    fileName = f"generated_images_{word}.png"
+    generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
