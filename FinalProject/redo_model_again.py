@@ -11,6 +11,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.models import load_model
+os.environ['TF_GRAPPLER_OPTIMIZERS'] = 'constfold,debug_stripper,remap,inlining,memory_optimization,arithmetic,autoparallel,dependency,loop_optimizer'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Clear the TensorFlow session
 tf.keras.backend.clear_session()
@@ -278,14 +280,60 @@ tuner = kt.Hyperband(
     hyperband_iterations=2
 )
 
-stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
-tuner.search(dataset, epochs=20, callbacks=[stop_early])
-best_model = tuner.get_best_models(num_models=1)[0]
+retrain = False
 
-best_model.save("best_model_tuned.h5")
-best_model.generator.save_weights('generator_weights_tuned.h5')
-best_model.summary()
+if retrain:
 
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+    tuner.search(dataset, epochs=20, callbacks=[stop_early])
+    best_model = tuner.get_best_models(num_models=1)[0]
+
+    best_model.generator.save_weights("generator_weights_tuned.h5")
+    best_model.generator.save("generator_model_tuned.h5")
+    best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
+
+else :
+    print("Lets do some predictions!!")
+
+    def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5), fileName = "generated_images.png"):
+        # Ensure the word is in the dictionary
+        if word not in label_dict:
+            print(f"Word '{word}' not found in label dictionary.")
+            return
+
+        word_label = label_dict[word]
+        num_classes = max(label_dict.values()) # Calculate correct number of classes
+
+        # Create random noise and one-hot labels
+        noise = tf.random.normal([num_images, latent_dim])
+        label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+
+        # Validate shapes
+        print(f"Noise shape: {tf.shape(noise)}, Label shape: {tf.shape(label_one_hot)}")
+
+        # Generate images
+        inputs = [noise, label_one_hot]
+        images = generator.predict(inputs, batch_size=num_images)
+        images = (images * 255).astype(np.uint8)
+
+        images = images[0]  # Assuming only one batch and selecting the first video's frames
+
+        # Create a grid of images
+        fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
+        for img, ax in zip(images, axes.flatten()):
+            ax.imshow(img)
+            ax.axis('off')
+
+        plt.tight_layout()
+        plt.savefig(fileName)
+
+    # Load generator model
+    generator = load_model("generator_model_tuned.h5", compile=False)
+
+    word_list = ['tired', 'still']
+    for word in word_list:
+        fileName = f"generated_images_tuned_{word}.png"
+        generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
 
 
 
