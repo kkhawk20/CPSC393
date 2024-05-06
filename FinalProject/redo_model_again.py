@@ -202,6 +202,10 @@ def build_discriminator(seq_length=16, height=256, width=256, channels=3):
     ])
     return model
 
+def numpy_safe(tensor):
+    return tf.py_function(lambda x: x.numpy(), [tensor], Tout=[tf.float32])
+
+
 class ConditionalGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim):
         super(ConditionalGAN, self).__init__()
@@ -266,14 +270,19 @@ class ConditionalGAN(keras.Model):
         self.g_loss_tracker.update_state(g_loss)
 
         # Save history for plotting
-        self.d_loss_history.append(self.d_loss_tracker.result().numpy())
-        self.g_loss_history.append(self.g_loss_tracker.result().numpy())
+        d_loss = self.d_loss_tracker.result()
+        d_loss_np = numpy_safe(d_loss)[0]
+        self.d_loss_history.append(d_loss_np)
+
+        g_loss = self.g_loss_tracker.result()
+        g_loss_np = numpy_safe(g_loss)[0]
+        self.g_loss_history.append(g_loss_np)
 
         # Reset the metrics at the end of each batch
         self.d_loss_tracker.reset_states()
         self.g_loss_tracker.reset_states()
 
-        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
+        return {"d_loss": d_loss, "g_loss": g_loss}
 
 def discriminator_loss(real_output, fake_output):
     smooth_positive_labels = 0.9
@@ -314,7 +323,7 @@ retrain = True
 
 if retrain:
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     tuner.search(dataset, epochs=20, callbacks=[stop_early])
     best_model = tuner.get_best_models(num_models=1)[0]
 
