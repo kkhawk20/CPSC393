@@ -382,9 +382,6 @@ else :
     # Load generator model
     generator = load_model("generator_model_tuned.h5", compile=False)
 
-
-
-
 word_list = ['tired', 'still']
 for word in word_list:
     fileName = f"generated_images_tuned_{word}.png"
