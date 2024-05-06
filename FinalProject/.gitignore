@@ -1,5 +1,6 @@
 /images.zip
 /images/
+/ARCHIVE/
 /logs/
 /training_checkpoints/
 gan_checkpoint.h5
