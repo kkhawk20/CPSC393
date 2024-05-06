@@ -13,6 +13,9 @@ from tensorflow.keras.utils import Sequence
 from tensorflow.keras.models import load_model
 os.environ['TF_GRAPPLER_OPTIMIZERS'] = 'constfold,debug_stripper,remap,inlining,memory_optimization,arithmetic,autoparallel,dependency,loop_optimizer'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+tf.compat.v1.enable_eager_execution()
+print("Eager execution: ", tf.executing_eagerly())
+print("TensorFlow version:", tf.__version__)
 
 # Clear the TensorFlow session
 tf.keras.backend.clear_session()
@@ -220,6 +223,10 @@ class ConditionalGAN(keras.Model):
         self.g_optimizer = g_optimizer
         self.d_loss_fn = d_loss_fn
         self.g_loss_fn = g_loss_fn
+        self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
+        self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
+        self.d_loss_history = []
+        self.g_loss_history = []
 
     def train_step(self, data):
         real_videos, _ = data
@@ -244,11 +251,16 @@ class ConditionalGAN(keras.Model):
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        self.d_loss_history.append(float(d_loss))
-        self.g_loss_history.append(float(g_loss))
+        # Convert losses from tensor to numpy array only if they are not already scalars
+        d_loss_scalar = d_loss.numpy() if isinstance(d_loss, tf.Tensor) else d_loss
+        g_loss_scalar = g_loss.numpy() if isinstance(g_loss, tf.Tensor) else g_loss
+
+        self.d_loss_tracker.update_state(d_loss_scalar)
+        self.g_loss_tracker.update_state(g_loss_scalar)
+
+        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
 
         return {"d_loss": d_loss, "g_loss": g_loss}
-
 
 def discriminator_loss(real_output, fake_output):
     smooth_positive_labels = 0.9
@@ -290,7 +302,7 @@ retrain = True
 
 if retrain:
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
     tuner.search(dataset, epochs=20, callbacks=[stop_early])
     best_model = tuner.get_best_models(num_models=1)[0]
 
