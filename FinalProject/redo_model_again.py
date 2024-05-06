@@ -16,6 +16,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.compat.v1.enable_eager_execution()
 print("Eager execution: ", tf.executing_eagerly())
 print("TensorFlow version:", tf.__version__)
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+print("Num CPUs Available: ", len(tf.config.list_physical_devices('CPU')))
 
 # Clear the TensorFlow session
 tf.keras.backend.clear_session()
@@ -202,31 +204,38 @@ def build_discriminator(seq_length=16, height=256, width=256, channels=3):
 
 class ConditionalGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim):
-        super().__init__()
+        super(ConditionalGAN, self).__init__()
         self.discriminator = discriminator
         self.generator = generator
         self.latent_dim = latent_dim
         self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
         self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
-        self.d_loss_history = []
-        self.g_loss_history = []
 
     def call(self, inputs, training=False):
-        noise_input = inputs[0]
-        label_input = inputs[1]
+        # inputs should be a list with two elements: [noise_input, label_input]
+        if isinstance(inputs, list) and len(inputs) == 2:
+            noise_input = inputs[0]
+            label_input = inputs[1]
+        else:
+            raise ValueError("Expected inputs to be a list of [noise_input, label_input]")
+
         generated_videos = self.generator([noise_input, label_input], training=training)
-        return generated_videos
+
+        if training:
+            real_inputs = inputs[0]  # Assuming real inputs (videos) are passed as the first part of the input during training
+            real_outputs = self.discriminator(real_inputs, training=True)
+            fake_outputs = self.discriminator(generated_videos, training=True)
+            return real_outputs, fake_outputs
+        else:
+            return generated_videos
+
 
     def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
-        super().compile()
+        super(ConditionalGAN, self).compile()
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
         self.d_loss_fn = d_loss_fn
         self.g_loss_fn = g_loss_fn
-        self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
-        self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
-        self.d_loss_history = []
-        self.g_loss_history = []
 
     def train_step(self, data):
         real_videos, _ = data
@@ -251,15 +260,6 @@ class ConditionalGAN(keras.Model):
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        # Convert losses from tensor to numpy array only if they are not already scalars
-        d_loss_scalar = d_loss.numpy() if isinstance(d_loss, tf.Tensor) else d_loss
-        g_loss_scalar = g_loss.numpy() if isinstance(g_loss, tf.Tensor) else g_loss
-
-        self.d_loss_tracker.update_state(d_loss_scalar)
-        self.g_loss_tracker.update_state(g_loss_scalar)
-
-        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
-
         return {"d_loss": d_loss, "g_loss": g_loss}
 
 def discriminator_loss(real_output, fake_output):
@@ -267,7 +267,6 @@ def discriminator_loss(real_output, fake_output):
     real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output) * smooth_positive_labels, real_output, from_logits=True)
     fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output, from_logits=True)
     return real_loss + fake_loss
-
 
 def generator_loss(fake_output):
     return tf.keras.losses.BinaryCrossentropy(from_logits=True)(tf.ones_like(fake_output), fake_output)

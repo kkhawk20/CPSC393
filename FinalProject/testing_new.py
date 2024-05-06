@@ -302,8 +302,6 @@ class ConditionalGAN(keras.Model):
         self.g_optimizer = g_optimizer
         self.d_loss_fn = d_loss_fn
         self.g_loss_fn = g_loss_fn
-        self.d_loss_history = []
-        self.g_loss_history = []
 
     def train_step(self, data):
         real_videos, _ = data
@@ -327,15 +325,6 @@ class ConditionalGAN(keras.Model):
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
-
-        if tf.executing_eagerly():
-            print("Eager execution is enabled (expected).")
-        else:
-            print("Eager execution is not enabled. This might cause issues.")
-
-        # # Convert tensor to numpy before appending to the history
-        # self.d_loss_history.append(d_loss.numpy())
-        # self.g_loss_history.append(g_loss.numpy())
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
