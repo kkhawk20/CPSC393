@@ -205,6 +205,8 @@ class ConditionalGAN(keras.Model):
         self.latent_dim = latent_dim
         self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
         self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
+        self.d_loss_history = []
+        self.g_loss_history = []
 
     def call(self, inputs, training=False):
         noise_input = inputs[0]
@@ -242,6 +244,9 @@ class ConditionalGAN(keras.Model):
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
+        self.d_loss_history.append(float(d_loss))
+        self.g_loss_history.append(float(g_loss))
+
         return {"d_loss": d_loss, "g_loss": g_loss}
 
 
@@ -276,21 +281,35 @@ def build_gan(hp):
 tuner = kt.Hyperband(
     build_gan,
     objective=kt.Objective("g_loss", direction="min"),
-    max_epochs=20,
-    hyperband_iterations=2
+    max_epochs=30,
+    hyperband_iterations=2,
+    overwrite=True
 )
 
-retrain = False
+retrain = True
 
 if retrain:
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     tuner.search(dataset, epochs=20, callbacks=[stop_early])
     best_model = tuner.get_best_models(num_models=1)[0]
 
     best_model.generator.save_weights("generator_weights_tuned.h5")
     best_model.generator.save("generator_model_tuned.h5")
     best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
+
+    # Also saving a plot showing the losses over epochs
+    import matplotlib.pyplot as plt
+
+    # Plotting
+    plt.figure(figsize=(10, 5))
+    plt.plot(best_model.d_loss_history, label='Discriminator Loss')
+    plt.plot(best_model.g_loss_history, label='Generator Loss')
+    plt.title('Training Losses Over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig('losses_over_epochs.png')
 
 else :
     print("Lets do some predictions!!")
@@ -329,6 +348,9 @@ else :
 
     # Load generator model
     generator = load_model("generator_model_tuned.h5", compile=False)
+
+
+
 
 word_list = ['tired', 'still']
 for word in word_list:
