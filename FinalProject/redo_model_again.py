@@ -323,7 +323,7 @@ retrain = True
 
 if retrain:
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20, direction = 'min')
     tuner.search(dataset, epochs=20, callbacks=[stop_early])
     best_model = tuner.get_best_models(num_models=1)[0]
 
