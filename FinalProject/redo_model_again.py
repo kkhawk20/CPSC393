@@ -205,7 +205,6 @@ def build_discriminator(seq_length=16, height=256, width=256, channels=3):
 def numpy_safe(tensor):
     return tf.py_function(lambda x: x.numpy(), [tensor], Tout=[tf.float32])
 
-
 class ConditionalGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim):
         super(ConditionalGAN, self).__init__()
@@ -316,14 +315,14 @@ tuner = kt.Hyperband(
     objective=kt.Objective("g_loss", direction="min"),
     max_epochs=30,
     hyperband_iterations=2,
-    overwrite=True
+    # overwrite=True
 )
 
 retrain = True
 
 if retrain:
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20, direction = 'min')
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     tuner.search(dataset, epochs=20, callbacks=[stop_early])
     best_model = tuner.get_best_models(num_models=1)[0]
 
@@ -380,12 +379,9 @@ else :
         plt.savefig(fileName)
 
     # Load generator model
-    generator = load_model("generator_model_tuned.h5", compile=False)
+    generator = load_model("generator_weights_tuned.h5", compile=False)
 
 word_list = ['tired', 'still']
 for word in word_list:
     fileName = f"generated_images_tuned_{word}.png"
     generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
-
-
-
