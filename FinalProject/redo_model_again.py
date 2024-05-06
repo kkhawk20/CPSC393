@@ -330,10 +330,10 @@ else :
     # Load generator model
     generator = load_model("generator_model_tuned.h5", compile=False)
 
-    word_list = ['tired', 'still']
-    for word in word_list:
-        fileName = f"generated_images_tuned_{word}.png"
-        generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
+word_list = ['tired', 'still']
+for word in word_list:
+    fileName = f"generated_images_tuned_{word}.png"
+    generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
 
 
 
