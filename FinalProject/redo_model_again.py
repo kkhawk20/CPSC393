@@ -210,6 +210,8 @@ class ConditionalGAN(keras.Model):
         self.latent_dim = latent_dim
         self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
         self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
+        self.d_loss_history = []
+        self.g_loss_history = []
 
     def call(self, inputs, training=False):
         # inputs should be a list with two elements: [noise_input, label_input]
@@ -240,10 +242,8 @@ class ConditionalGAN(keras.Model):
     def train_step(self, data):
         real_videos, _ = data
         batch_size = tf.shape(real_videos)[0]
-
         random_labels = tf.random.uniform((batch_size,), minval=0, maxval=num_classes, dtype=tf.int32)
         label_one_hot = tf.one_hot(random_labels, depth=num_classes)
-
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
         with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
@@ -255,12 +255,25 @@ class ConditionalGAN(keras.Model):
             d_loss = d_loss_real + d_loss_fake
             g_loss = self.g_loss_fn(fake_predictions)
 
+        # Gradient application
         d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        return {"d_loss": d_loss, "g_loss": g_loss}
+        # Update the metrics
+        self.d_loss_tracker.update_state(d_loss)
+        self.g_loss_tracker.update_state(g_loss)
+
+        # Save history for plotting
+        self.d_loss_history.append(self.d_loss_tracker.result().numpy())
+        self.g_loss_history.append(self.g_loss_tracker.result().numpy())
+
+        # Reset the metrics at the end of each batch
+        self.d_loss_tracker.reset_states()
+        self.g_loss_tracker.reset_states()
+
+        return {"d_loss": self.d_loss_tracker.result(), "g_loss": self.g_loss_tracker.result()}
 
 def discriminator_loss(real_output, fake_output):
     smooth_positive_labels = 0.9
