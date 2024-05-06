@@ -302,19 +302,18 @@ class ConditionalGAN(keras.Model):
         self.g_optimizer = g_optimizer
         self.d_loss_fn = d_loss_fn
         self.g_loss_fn = g_loss_fn
+        self.d_loss_history = []
+        self.g_loss_history = []
 
     def train_step(self, data):
-        real_videos, _ = data  # Ignore labels from the dataset for discriminator training
+        real_videos, _ = data
         batch_size = tf.shape(real_videos)[0]
 
-        # Generating random labels for fake video generation
         random_labels = tf.random.uniform((batch_size,), minval=0, maxval=num_classes, dtype=tf.int32)
         label_one_hot = tf.one_hot(random_labels, depth=num_classes)
 
-        # Generating random latent vectors
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
-        # Train Discriminator
         with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
             generated_videos = self.generator([random_latent_vectors, label_one_hot], training=True)
             real_predictions = self.discriminator(real_videos, training=True)
@@ -324,13 +323,19 @@ class ConditionalGAN(keras.Model):
             d_loss = d_loss_real + d_loss_fake
             g_loss = self.g_loss_fn(fake_predictions)
 
-        # Gradient computation
         d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
-
-        # Apply gradients
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
+
+        if tf.executing_eagerly():
+            print("Eager execution is enabled (expected).")
+        else:
+            print("Eager execution is not enabled. This might cause issues.")
+
+        # # Convert tensor to numpy before appending to the history
+        # self.d_loss_history.append(d_loss.numpy())
+        # self.g_loss_history.append(g_loss.numpy())
 
         return {"d_loss": d_loss, "g_loss": g_loss}
 
