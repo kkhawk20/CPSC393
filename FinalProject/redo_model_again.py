@@ -292,7 +292,6 @@ def discriminator_loss(real_output, fake_output):
 def generator_loss(fake_output):
     return tf.keras.losses.BinaryCrossentropy(from_logits=True)(tf.ones_like(fake_output), fake_output)
 
-
 def build_gan(hp):
     generator = build_generator(hp)
     discriminator = build_discriminator()
