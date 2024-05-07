@@ -315,7 +315,7 @@ tuner = kt.Hyperband(
     objective=kt.Objective("g_loss", direction="min"),
     max_epochs=30,
     hyperband_iterations=2,
-    # overwrite=True
+    overwrite=True
 )
 
 retrain = True
@@ -385,3 +385,4 @@ word_list = ['tired', 'still']
 for word in word_list:
     fileName = f"generated_images_tuned_{word}.png"
     generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
+
