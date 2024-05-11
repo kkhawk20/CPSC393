@@ -80,7 +80,7 @@ def build_generator_with_resnet(latent_dim, num_classes):
     x = UpSampling2D(size=(2, 2))(x)
     x = Conv2DTranspose(3, kernel_size=(3, 3), padding='same', activation='sigmoid')(x)
     
-    resnet_base = ResNet50(weights='imagenet', include_top=False, input_shape=(114, 114, 3))
+    resnet_base = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
     resnet_base.trainable = False  # Freeze the ResNet layers
     
     x = resnet_base(x)
@@ -95,8 +95,8 @@ def build_discriminator(num_classes):
     image_input = Input(shape=(28, 28, 1))
     label_input = Input(shape=(num_classes,))
 
-    x = Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")(image_input)
-    x = Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu")(x)
+    x = Conv2D(32, (3, 3), strides=(2, 2), padding="same", activation="relu")(image_input)
+    x = Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")(x)
     x = Flatten()(x)
     
     x = Concatenate()([x, label_input])
@@ -106,7 +106,7 @@ def build_discriminator(num_classes):
     return model
 
 def discriminator_loss(real_output, fake_output):
-    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output), real_output)
+    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output) * 0.9, real_output)
     fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output)
     return real_loss + fake_loss
 
@@ -142,17 +142,10 @@ class ConditionalGAN(keras.Model):
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
         fake_labels = tf.one_hot(tf.argmax(labels, axis=1), self.num_classes)
 
-        # Debugging batch sizes
-        print(f"Batch size: {batch_size}")
-
         with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
             generated_images = self.generator([random_latent_vectors, fake_labels], training=True)
             real_output = self.discriminator([images, labels], training=True)
             fake_output = self.discriminator([generated_images, fake_labels], training=True)
-
-            # Debugging shapes
-            print(f"Real images shape: {images.shape}, Generated images shape: {generated_images.shape}")
-            print(f"Real output shape: {real_output.shape}, Fake output shape: {fake_output.shape}")
 
             d_loss = self.d_loss_fn(real_output, fake_output)
             g_loss = self.g_loss_fn(fake_output)
@@ -174,7 +167,7 @@ generator = build_generator_with_resnet(latent_dim, num_classes)
 gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim, num_classes=num_classes)
 gan.compile(
     d_optimizer=keras.optimizers.Adam(0.0001),
-    g_optimizer=keras.optimizers.Adam(0.0001)
+    g_optimizer=keras.optimizers.Adam(0.0004)
 )
 
 # Filter out batches that are smaller than the required batch size
@@ -183,9 +176,9 @@ def filter_incomplete_batches(dataset, batch_size):
 
 train_dataset = filter_incomplete_batches(train_dataset, batch_size)
 
-# Debugging the dataset before training
-for batch in train_dataset.take(1):
-    print(f"Sample batch shapes - images: {batch[0].shape}, labels: {batch[1].shape}")
+# # Debugging the dataset before training
+# for batch in train_dataset.take(1):
+#     print(f"Sample batch shapes - images: {batch[0].shape}, labels: {batch[1].shape}")
 
 # Train the GAN
 history = gan.fit(train_dataset, epochs=50)
