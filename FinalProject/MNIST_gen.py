@@ -1,20 +1,19 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import ConvLSTM2D, BatchNormalization, Conv2DTranspose, TimeDistributed, Conv2D, Flatten, Dense, LSTM
+from tensorflow.keras.layers import Conv2D, BatchNormalization, Conv2DTranspose, Flatten, Dense, Reshape
 import keras_tuner as kt
-from tensorflow.keras import layers
-import numpy as np
-import cv2
-import os
-import json
-import pandas as pd
-import matplotlib.pyplot as plt
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import LabelBinarizer
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
 os.environ['TF_GRAPPLER_OPTIMIZERS'] = 'constfold,debug_stripper,remap,inlining,memory_optimization,arithmetic,autoparallel,dependency,loop_optimizer'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.compat.v1.enable_eager_execution()
+
 print("Eager execution: ", tf.executing_eagerly())
 print("TensorFlow version:", tf.__version__)
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -25,128 +24,98 @@ tf.keras.backend.clear_session()
 
 main_path = "/app/rundir/CPSC393/FinalProject/"
 batch_size = 2
-num_channels = 1
-num_classes = 408
-image_size = 256
-latent_dim = 408
-max_frames = 16
+num_classes = 24
+latent_dim = 100
 
 train_df = pd.read_csv("./sign_mnist_train.csv")
 test_df = pd.read_csv("./sign_mnist_test.csv")
 
 # Separating X and Y
-y_train = train_df['label']
-y_test = test_df['label']
+y_train = train_df.pop('label')
+y_test = test_df.pop('label')
 
-del train_df['label']
-del test_df['label']
+# Rescale data to be 0-1 instead of 0-255
+trainX = train_df.values.reshape(-1, 28, 28, 1) / 255.0
+testX = test_df.values.reshape(-1, 28, 28, 1) / 255.0
 
-# rescale data to be 0-1 instead of 0-255
-trainX = train_df.astype("float32") / 255.0
-testX = test_df.astype("float32") / 255.0
-
-# change the labels to be in the correct format
+# Change the labels to be in the correct format
 lb = LabelBinarizer()
 trainY = lb.fit_transform(y_train)
 testY = lb.transform(y_test)
 
-trainX.head()
-trainX.shape
-
-print(trainX.shape,
-trainY.shape)
-
-print(testX.shape,
-testY.shape)
-
-# Visualize some images!!!
-import matplotlib.pyplot as plt
-
-# I used different names cuz i wanted to reshape them without
-# Changing the original data put into the model :)
-x_train = train_df.values
-x_test = test_df.values
-x_train_vis = x_train.reshape(-1,28,28,1)
-x_test = x_test.reshape(-1,28,28,1)
+# Visualize some images
 f, ax = plt.subplots(2,5)
 f.set_size_inches(10, 10)
-k = 0
 for i in range(2):
     for j in range(5):
-        ax[i,j].imshow(x_train_vis[k].reshape(28, 28) , cmap = "gray")
-        k += 1
+        ax[i,j].imshow(trainX[j + i * 5].reshape(28, 28), cmap="gray")
     plt.tight_layout()    
 plt.savefig("ASL_MNIST_Images.png")
 
-# Convert the pandas DataFrame to numpy arrays
-x_train = trainX.values.reshape(-1, 28, 28, 1)
-y_train = trainY
-
 # Use tf.data to create the dataset
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-
-# Batch and shuffle the dataset
+train_dataset = tf.data.Dataset.from_tensor_slices((trainX, trainY))
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
 
-def build_generator(hp):
-    latent_dim = 408
-    num_classes = 408
-    seq_length = 16
-    height = 256
-    width = 256
-    channels = 3
-
-    noise_input = keras.Input(shape=(latent_dim,))
-    label_input = keras.Input(shape=(num_classes,))
-    concat_input = layers.Concatenate()([noise_input, label_input])
-
-    # Dense layer to expand the input
-    x = layers.Dense(4 * 4 * 256, activation='relu')(concat_input)
-    x = layers.Reshape((1, 4, 4, 256))(x)
-
-    # ConvLSTM layers for sequence generation
-    x = layers.ConvLSTM2D(128, (3, 3), padding="same", return_sequences=True)(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.ConvLSTM2D(64, (3, 3), padding="same", return_sequences=True)(x)
-    x = layers.BatchNormalization()(x)
-    print(f"Shape after ConvLSTM layers: {x.shape}")
-
-    # Upscaling to the desired dimensions
-    x = TimeDistributed(Conv2DTranspose(64, (5, 5), strides=(4, 4), padding='same', activation='relu'))(x)
-    print(f"After first Conv2DTranspose: {x.shape}")
-    x = TimeDistributed(BatchNormalization())(x)
-    x = TimeDistributed(Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', activation='relu'))(x)
-    print(f"After second Conv2DTranspose: {x.shape}")
-    x = TimeDistributed(BatchNormalization())(x)
-    x = TimeDistributed(Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', activation='relu'))(x)
-    print(f"After third Conv2DTranspose: {x.shape}")
-    x = TimeDistributed(BatchNormalization())(x)
-    x = TimeDistributed(Conv2DTranspose(512, (5, 5), strides=(2, 2), padding='same', activation='relu'))(x)
-    print(f"After fourth Conv2DTranspose: {x.shape}")
-    x = TimeDistributed(BatchNormalization())(x)
-    x = TimeDistributed(Conv2DTranspose(channels, (5, 5), strides=(2, 2), padding='same', activation='sigmoid'))(x)
-    print(f"Final generator output shape: {x.shape}")
-
-    # Repeat the generated frames to match the expected sequence length
-    x = layers.Lambda(lambda x: tf.repeat(x, seq_length, axis=1))(x)
-
-    model = keras.Model(inputs=[noise_input, label_input], outputs=x)
-    return model
-
-def build_discriminator(seq_length=16, height=256, width=256, channels=3):
+def create_base_model(input_shape=(28, 28, 1), num_classes=24):
     model = keras.Sequential([
-        keras.Input(shape=(seq_length, height, width, channels)),
-        TimeDistributed(Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")),
-        TimeDistributed(Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu")),
-        TimeDistributed(Flatten()),
-        LSTM(128, return_sequences=False),
+        keras.Input(shape=input_shape),
+        Conv2D(32, kernel_size=(3, 3), activation="relu"),
+        BatchNormalization(),
+        Conv2D(64, kernel_size=(3, 3), activation="relu"),
+        BatchNormalization(),
         Flatten(),
-        Dense(1)
+        Dense(128, activation='relu'),
+        Dense(num_classes, activation='softmax')
     ])
     return model
 
-def numpy_safe(tensor):
-    return tf.py_function(lambda x: x.numpy(), [tensor], Tout=[tf.float32])
+# Prepare the dataset
+train_dataset = tf.data.Dataset.from_tensor_slices((trainX, trainY)).shuffle(1024).batch(32)
+
+# Create and train the base model
+base_model = create_base_model()
+base_model.compile(loss="categorical_crossentropy", optimizer=keras.optimizers.Adam(), metrics=["accuracy"])
+base_model.fit(train_dataset, epochs=10)
+
+# Save the weights
+base_model.save_weights('base_model_weights.h5')
+
+def build_generator(hp, base_model):
+    # Create a new model that reuses the convolutional layers of the base model
+    conv_model = keras.Sequential(base_model.layers[:-2])  # Exclude the last two layers
+    for layer in conv_model.layers:
+        layer.trainable = False  # Freeze the layers
+
+    model = keras.Sequential([
+        keras.Input(shape=(latent_dim,)),
+        Dense(7*7*64, activation='relu'),
+        Reshape((7, 7, 64)),
+        Conv2DTranspose(64, kernel_size=(3, 3), strides=(2, 2), padding='same', activation='relu'),
+        BatchNormalization(),
+        Conv2DTranspose(32, kernel_size=(3, 3), strides=(2, 2), padding='same', activation='relu'),
+        BatchNormalization(),
+        Conv2DTranspose(1, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='sigmoid'),
+        conv_model  # Append the pretrained convolutional model
+    ])
+    return model
+
+def build_discriminator():
+    model = keras.Sequential([
+        keras.Input(shape=(28, 28, 1)),
+        Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu"),
+        Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu"),
+        Flatten(),
+        Dense(1, activation='sigmoid')
+    ])
+    return model
+
+def discriminator_loss(real_output, fake_output):
+    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output), real_output, from_logits=True)
+    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output, from_logits=True)
+    return real_loss + fake_loss
+
+def generator_loss(fake_output):
+    return tf.keras.losses.binary_crossentropy(tf.ones_like(fake_output), fake_output, from_logits=True)
 
 class ConditionalGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim):
@@ -154,173 +123,103 @@ class ConditionalGAN(keras.Model):
         self.discriminator = discriminator
         self.generator = generator
         self.latent_dim = latent_dim
-        self.d_loss_tracker = keras.metrics.Mean(name='d_loss')
-        self.g_loss_tracker = keras.metrics.Mean(name='g_loss')
-        self.d_loss_history = []
-        self.g_loss_history = []
 
-    def call(self, inputs, training=False):
-        # inputs should be a list with two elements: [noise_input, label_input]
-        if isinstance(inputs, list) and len(inputs) == 2:
-            noise_input = inputs[0]
-            label_input = inputs[1]
-        else:
-            raise ValueError("Expected inputs to be a list of [noise_input, label_input]")
-
-        generated_videos = self.generator([noise_input, label_input], training=training)
-
-        if training:
-            real_inputs = inputs[0]  # Assuming real inputs (videos) are passed as the first part of the input during training
-            real_outputs = self.discriminator(real_inputs, training=True)
-            fake_outputs = self.discriminator(generated_videos, training=True)
-            return real_outputs, fake_outputs
-        else:
-            return generated_videos
-
-
-    def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
+    def compile(self, d_optimizer, g_optimizer):
         super(ConditionalGAN, self).compile()
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
-        self.d_loss_fn = d_loss_fn
-        self.g_loss_fn = g_loss_fn
+        self.d_loss_fn = discriminator_loss
+        self.g_loss_fn = generator_loss
 
     def train_step(self, data):
-        real_videos, _ = data
-        batch_size = tf.shape(real_videos)[0]
-        random_labels = tf.random.uniform((batch_size,), minval=0, maxval=num_classes, dtype=tf.int32)
-        label_one_hot = tf.one_hot(random_labels, depth=num_classes)
+        images, labels = data
+        batch_size = tf.shape(images)[0]
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
         with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
-            generated_videos = self.generator([random_latent_vectors, label_one_hot], training=True)
-            real_predictions = self.discriminator(real_videos, training=True)
-            fake_predictions = self.discriminator(generated_videos, training=True)
-            d_loss_real = self.d_loss_fn(tf.ones_like(real_predictions), real_predictions)
-            d_loss_fake = self.d_loss_fn(tf.zeros_like(fake_predictions), fake_predictions)
-            d_loss = d_loss_real + d_loss_fake
-            g_loss = self.g_loss_fn(fake_predictions)
+            generated_images = self.generator(random_latent_vectors, training=True)
+            real_output = self.discriminator(images, training=True)
+            fake_output = self.discriminator(generated_images, training=True)
 
-        # Gradient application
+            d_loss = self.d_loss_fn(real_output, fake_output)
+            g_loss = self.g_loss_fn(fake_output)
+
         d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
         self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
 
-        # Update the metrics
-        self.d_loss_tracker.update_state(d_loss)
-        self.g_loss_tracker.update_state(g_loss)
-
-        # Save history for plotting
-        d_loss = self.d_loss_tracker.result()
-        d_loss_np = numpy_safe(d_loss)[0]
-        self.d_loss_history.append(d_loss_np)
-
-        g_loss = self.g_loss_tracker.result()
-        g_loss_np = numpy_safe(g_loss)[0]
-        self.g_loss_history.append(g_loss_np)
-
-        # Reset the metrics at the end of each batch
-        self.d_loss_tracker.reset_states()
-        self.g_loss_tracker.reset_states()
-
         return {"d_loss": d_loss, "g_loss": g_loss}
 
-def discriminator_loss(real_output, fake_output):
-    smooth_positive_labels = 0.9
-    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output) * smooth_positive_labels, real_output, from_logits=True)
-    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output, from_logits=True)
-    return real_loss + fake_loss
+# Initialize and compile the GAN
+discriminator = build_discriminator()
+# Load the base model
+base_model = create_base_model()
+base_model.load_weights('base_model_weights.h5')
 
-def generator_loss(fake_output):
-    return tf.keras.losses.BinaryCrossentropy(from_logits=True)(tf.ones_like(fake_output), fake_output)
+# Build the generator with transfer learning
+generator = build_generator(kt.HyperParameters(), base_model)
 
-def build_gan(hp):
-    generator = build_generator(hp)
-    discriminator = build_discriminator()
-
-    learning_rate = hp.Choice("learning_rate", [1e-2, 1e-3, 1e-4])
-    batch_size = hp.Choice("batch_size", [2, 4, 8])
-
-    gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
-    gan.compile(
-        d_optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-        g_optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-        d_loss_fn=discriminator_loss,
-        g_loss_fn=generator_loss
-    )
-
-    return gan
-
-tuner = kt.Hyperband(
-    build_gan,
-    objective=kt.Objective("g_loss", direction="min"),
-    max_epochs=30,
-    hyperband_iterations=2,
-    overwrite=True
+# Initialize the GAN
+gan = ConditionalGAN(discriminator=build_discriminator(), generator=generator, latent_dim=latent_dim)
+gan.compile(
+    d_optimizer=keras.optimizers.Adam(0.0001),
+    g_optimizer=keras.optimizers.Adam(0.0001)
 )
 
-retrain = True
+# Train the GAN
+gan.fit(train_dataset, epochs=50)
 
-if retrain:
+def generate_and_plot_images(generator, word, label_map, latent_dim, grid_dim=(2, 5), file_name="generated_images.png"):
+    # Split the word into letters and convert each letter to its corresponding label
+    labels = [label_map[letter] for letter in word.lower() if letter in label_map]
 
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
-    tuner.search(train_dataset, epochs=20, callbacks=[stop_early])
-    best_model = tuner.get_best_models(num_models=1)[0]
+    # Create random noise
+    noise = tf.random.normal([len(labels), latent_dim])
 
-    best_model.generator.save_weights("generator_weights_tuned.h5")
-    best_model.generator.save("generator_model_tuned.h5")
-    best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
+    # Generate images
+    images = generator.predict(noise, batch_size=len(labels))
+    images = (images * 255).astype(np.uint8)
 
-    # Also saving a plot showing the losses over epochs
-    import matplotlib.pyplot as plt
+    # Create a grid of images
+    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
+    for img, ax, letter in zip(images, axes.flatten(), word):
+        ax.imshow(img[:, :, 0], cmap='gray')  # Adjust indexing if necessary
+        ax.set_title(f"Sign for '{letter}'")
+        ax.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig(file_name)
 
-    # Plotting
-    plt.figure(figsize=(10, 5))
-    plt.plot(best_model.d_loss_history, label='Discriminator Loss')
-    plt.plot(best_model.g_loss_history, label='Generator Loss')
-    plt.title('Training Losses Over Epochs')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig('losses_over_epochs.png')
+# Example label dictionary (you need to adjust this according to your dataset)
+label_dict = {
+    'a': 0,
+    'b': 1,
+    'c': 2,
+    'd': 3,
+    'e': 4,
+    'f': 5,
+    'g': 6,
+    'h': 7,
+    'i': 8,
+    'j': 9,
+    'k': 10,
+    'l': 11,
+    'm': 12,
+    'n': 13,
+    'o': 14,
+    'p': 15,
+    'q': 16,
+    'r': 17,
+    's': 18,
+    't': 19,
+    'u': 20,
+    'v': 21,
+    'w': 22,
+    'x': 23
+}
+# # Load the generator model
+# generator = gan.generator()
 
-else :
-    print("Lets do some predictions!!")
-
-    def generate_and_plot_images(generator, word, latent_dim=100, num_images=10, grid_dim=(2, 5), fileName = "generated_images.png"):
-
-        # Split the given word into letters
-        word_list = list(word.lower())
-
-        # Create random noise and one-hot labels
-        noise = tf.random.normal([num_images, latent_dim])
-        label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
-
-        # Validate shapes
-        print(f"Noise shape: {tf.shape(noise)}, Label shape: {tf.shape(label_one_hot)}")
-
-        # Generate images
-        inputs = [noise, label_one_hot]
-        images = generator.predict(inputs, batch_size=num_images)
-        images = (images * 255).astype(np.uint8)
-
-        images = images[0]  # Assuming only one batch and selecting the first video's frames
-
-        # Create a grid of images
-        fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
-        for img, ax in zip(images, axes.flatten()):
-            ax.imshow(img)
-            ax.axis('off')
-
-        plt.tight_layout()
-        plt.savefig(fileName)
-
-    # Load generator model
-    generator = load_model("generator_weights_tuned.h5", compile=False)
-
-word_list = ['tired']
-for word in word_list:
-    fileName = f"generated_images_tuned_{word}.png"
-    generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
-
+# Generate and plot images for a word
+generate_and_plot_images(generator, "hello", label_dict, latent_dim=latent_dim, grid_dim=(1, 5), file_name="generated_images_hello.png")
