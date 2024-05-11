@@ -1,9 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Conv2D, BatchNormalization, Conv2DTranspose, Flatten, Dense, Reshape
-import keras_tuner as kt
-from tensorflow.keras.utils import Sequence
-from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Conv2D, BatchNormalization, Conv2DTranspose, Flatten, Dense, Reshape, UpSampling2D
+from tensorflow.keras.applications import ResNet50
 from sklearn.preprocessing import LabelBinarizer
 import numpy as np
 import pandas as pd
@@ -23,7 +21,7 @@ print("Num CPUs Available: ", len(tf.config.list_physical_devices('CPU')))
 tf.keras.backend.clear_session()
 
 main_path = "/app/rundir/CPSC393/FinalProject/"
-batch_size = 2
+batch_size = 32
 num_classes = 24
 latent_dim = 100
 
@@ -44,58 +42,44 @@ trainY = lb.fit_transform(y_train)
 testY = lb.transform(y_test)
 
 # Visualize some images
-f, ax = plt.subplots(2,5)
+f, ax = plt.subplots(2, 5)
 f.set_size_inches(10, 10)
 for i in range(2):
     for j in range(5):
-        ax[i,j].imshow(trainX[j + i * 5].reshape(28, 28), cmap="gray")
+        ax[i, j].imshow(trainX[j + i * 5].reshape(28, 28), cmap="gray")
     plt.tight_layout()    
 plt.savefig("ASL_MNIST_Images.png")
 
 # Use tf.data to create the dataset
 train_dataset = tf.data.Dataset.from_tensor_slices((trainX, trainY))
-train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+train_dataset = train_dataset.batch(batch_size)
 
-def create_base_model(input_shape=(28, 28, 1), num_classes=24):
-    model = keras.Sequential([
-        keras.Input(shape=input_shape),
-        Conv2D(32, kernel_size=(3, 3), activation="relu"),
-        BatchNormalization(),
-        Conv2D(64, kernel_size=(3, 3), activation="relu"),
-        BatchNormalization(),
-        Flatten(),
-        Dense(128, activation='relu'),
-        Dense(num_classes, activation='softmax')
-    ])
-    return model
-
-# Prepare the dataset
-train_dataset = tf.data.Dataset.from_tensor_slices((trainX, trainY)).shuffle(1024).batch(32)
-
-# Create and train the base model
-base_model = create_base_model()
-base_model.compile(loss="categorical_crossentropy", optimizer=keras.optimizers.Adam(), metrics=["accuracy"])
-base_model.fit(train_dataset, epochs=10)
-
-# Save the weights
-base_model.save_weights('base_model_weights.h5')
-
-def build_generator(hp, base_model):
-    # Create a new model that reuses the convolutional layers of the base model
-    conv_model = keras.Sequential(base_model.layers[:-2])  # Exclude the last two layers
-    for layer in conv_model.layers:
-        layer.trainable = False  # Freeze the layers
+def build_generator_with_resnet(latent_dim):
+    resnet_base = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    resnet_base.trainable = False  # Freeze the ResNet layers
 
     model = keras.Sequential([
         keras.Input(shape=(latent_dim,)),
-        Dense(7*7*64, activation='relu'),
-        Reshape((7, 7, 64)),
-        Conv2DTranspose(64, kernel_size=(3, 3), strides=(2, 2), padding='same', activation='relu'),
+        Dense(7*7*256, activation='relu'),
+        Reshape((7, 7, 256)),
+        UpSampling2D(size=(2, 2)),
+        Conv2DTranspose(256, kernel_size=(3, 3), padding='same', activation='relu'),
         BatchNormalization(),
-        Conv2DTranspose(32, kernel_size=(3, 3), strides=(2, 2), padding='same', activation='relu'),
+        UpSampling2D(size=(2, 2)),
+        Conv2DTranspose(128, kernel_size=(3, 3), padding='same', activation='relu'),
         BatchNormalization(),
-        Conv2DTranspose(1, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='sigmoid'),
-        conv_model  # Append the pretrained convolutional model
+        UpSampling2D(size=(2, 2)),
+        Conv2DTranspose(64, kernel_size=(3, 3), padding='same', activation='relu'),
+        BatchNormalization(),
+        UpSampling2D(size=(2, 2)),
+        Conv2DTranspose(32, kernel_size=(3, 3), padding='same', activation='relu'),
+        BatchNormalization(),
+        UpSampling2D(size=(2, 2)),
+        Conv2DTranspose(3, kernel_size=(3, 3), padding='same', activation='sigmoid'),
+        resnet_base,
+        Flatten(),
+        Dense(28*28, activation='sigmoid'),
+        Reshape((28, 28, 1))
     ])
     return model
 
@@ -110,12 +94,12 @@ def build_discriminator():
     return model
 
 def discriminator_loss(real_output, fake_output):
-    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output), real_output, from_logits=True)
-    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output, from_logits=True)
+    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real_output), real_output)
+    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake_output), fake_output)
     return real_loss + fake_loss
 
 def generator_loss(fake_output):
-    return tf.keras.losses.binary_crossentropy(tf.ones_like(fake_output), fake_output, from_logits=True)
+    return tf.keras.losses.binary_crossentropy(tf.ones_like(fake_output), fake_output)
 
 class ConditionalGAN(keras.Model):
     def __init__(self, discriminator, generator, latent_dim):
@@ -133,13 +117,18 @@ class ConditionalGAN(keras.Model):
 
     def train_step(self, data):
         images, labels = data
-        batch_size = tf.shape(images)[0]
+        batch_size = 32
+
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
         with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
             generated_images = self.generator(random_latent_vectors, training=True)
             real_output = self.discriminator(images, training=True)
             fake_output = self.discriminator(generated_images, training=True)
+
+            # Debugging shapes
+            print(f"Real images shape: {images.shape}, Generated images shape: {generated_images.shape}")
+            print(f"Real output shape: {real_output.shape}, Fake output shape: {fake_output.shape}")
 
             d_loss = self.d_loss_fn(real_output, fake_output)
             g_loss = self.g_loss_fn(fake_output)
@@ -153,19 +142,26 @@ class ConditionalGAN(keras.Model):
 
 # Initialize and compile the GAN
 discriminator = build_discriminator()
-# Load the base model
-base_model = create_base_model()
-base_model.load_weights('base_model_weights.h5')
 
-# Build the generator with transfer learning
-generator = build_generator(kt.HyperParameters(), base_model)
+# Build the generator with ResNet integration
+generator = build_generator_with_resnet(latent_dim)
 
 # Initialize the GAN
-gan = ConditionalGAN(discriminator=build_discriminator(), generator=generator, latent_dim=latent_dim)
+gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
 gan.compile(
     d_optimizer=keras.optimizers.Adam(0.0001),
     g_optimizer=keras.optimizers.Adam(0.0001)
 )
+
+# Ensure consistent batch size
+def ensure_batch_size(dataset, batch_size):
+    return dataset.map(lambda x, y: (x[:batch_size], y[:batch_size]))
+
+train_dataset = ensure_batch_size(train_dataset, batch_size)
+
+# Debugging the dataset before training
+for batch in train_dataset.take(1):
+    print(f"Sample batch shapes - images: {batch[0].shape}, labels: {batch[1].shape}")
 
 # Train the GAN
 gan.fit(train_dataset, epochs=50)
@@ -218,8 +214,7 @@ label_dict = {
     'w': 22,
     'x': 23
 }
-# # Load the generator model
-# generator = gan.generator()
 
 # Generate and plot images for a word
-generate_and_plot_images(generator, "hello", label_dict, latent_dim=latent_dim, grid_dim=(1, 5), file_name="generated_images_hello.png")
+generate_and_plot_images(generator, "hello", label_dict, latent_dim=latent_dim, 
+                         grid_dim=(1, 5), file_name="generated_images_hello.png")
