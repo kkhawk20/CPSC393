@@ -95,8 +95,8 @@ def build_discriminator(num_classes):
     image_input = Input(shape=(28, 28, 1))
     label_input = Input(shape=(num_classes,))
 
-    x = Conv2D(32, (3, 3), strides=(2, 2), padding="same", activation="relu")(image_input)
-    x = Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")(x)
+    x = Conv2D(64, (3, 3), strides=(2, 2), padding="same", activation="relu")(image_input)
+    x = Conv2D(128, (3, 3), strides=(2, 2), padding="same", activation="relu")(x)
     x = Flatten()(x)
     
     x = Concatenate()([x, label_input])
@@ -152,8 +152,8 @@ class ConditionalGAN(keras.Model):
 
         d_grads = disc_tape.gradient(d_loss, self.discriminator.trainable_weights)
         g_grads = gen_tape.gradient(g_loss, self.generator.trainable_weights)
-        self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
         self.g_optimizer.apply_gradients(zip(g_grads, self.generator.trainable_weights))
+        self.d_optimizer.apply_gradients(zip(d_grads, self.discriminator.trainable_weights))
 
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
@@ -166,8 +166,8 @@ discriminator = build_discriminator(num_classes)
 generator = build_generator_with_resnet(latent_dim, num_classes)
 gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim, num_classes=num_classes)
 gan.compile(
-    d_optimizer=keras.optimizers.Adam(0.00005),
-    g_optimizer=keras.optimizers.Adam(0.0001)
+    d_optimizer=keras.optimizers.Adam(0.0001),
+    g_optimizer=keras.optimizers.Adam(0.00001)
 )
 
 # Filter out batches that are smaller than the required batch size
@@ -176,12 +176,48 @@ def filter_incomplete_batches(dataset, batch_size):
 
 train_dataset = filter_incomplete_batches(train_dataset, batch_size)
 
-# # Debugging the dataset before training
-# for batch in train_dataset.take(1):
-#     print(f"Sample batch shapes - images: {batch[0].shape}, labels: {batch[1].shape}")
+# Function to save generated images during training
+def save_generated_images(generator, epoch, latent_dim, num_classes):
+    sample_labels = ['h', 'e', 'l', 'l', 'o']
+    label_map = {chr(i + 97): i for i in range(26)}  # 'a': 0, 'b': 1, ..., 'z': 25
+    
+    labels = [label_map[letter] for letter in sample_labels]
+    noise = tf.random.normal([len(labels), latent_dim])
+    label_one_hot = tf.one_hot(labels, num_classes)
+
+    images = generator.predict([noise, label_one_hot])
+    images = (images * 255).astype(np.uint8)
+
+    fig, axes = plt.subplots(1, len(sample_labels), figsize=(15, 10))
+    for img, ax, letter in zip(images, axes.flatten(), sample_labels):
+        ax.imshow(img[:, :, 0], cmap='gray')
+        ax.set_title(f"Sign for '{letter}'")
+        ax.axis('off')
+
+    plt.tight_layout()
+    plt.savefig(f'./gen_images/epoch_{epoch:03d}.png')
+    plt.close()
+
+def scheduler(epoch, lr):
+    if epoch < 10:
+        return lr
+    else:
+        return lr * 0.99
+    
+lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
+
+# Custom callback to save images
+class ImageSaverCallback(tf.keras.callbacks.Callback):
+    def __init__(self, generator, latent_dim, num_classes):
+        self.generator = generator
+        self.latent_dim = latent_dim
+        self.num_classes = num_classes
+
+    def on_epoch_end(self, epoch, logs=None):
+        save_generated_images(self.generator, epoch, self.latent_dim, self.num_classes)
 
 # Train the GAN
-history = gan.fit(train_dataset, epochs=200)
+history = gan.fit(train_dataset, epochs=200, callbacks = [lr_callback, ImageSaverCallback(generator, latent_dim, num_classes)])
 
 # Plotting the training losses
 def plot_training_losses(history, file_name="training_losses.png"):
@@ -197,7 +233,6 @@ def plot_training_losses(history, file_name="training_losses.png"):
     plt.ylabel('Loss')
     plt.legend()
     plt.savefig(file_name)
-    plt.show()
 
 plot_training_losses(history, file_name="training_losses.png")
 
@@ -220,7 +255,6 @@ def generate_and_plot_images(generator, word, label_map, latent_dim, num_classes
     plt.tight_layout()
     plt.savefig(file_name)
 
-# Example label dictionary
 label_dict = {
     'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9,
     'k': 10, 'l': 11, 'm': 12, 'n': 13, 'o': 14, 'p': 15, 'q': 16, 'r': 17, 's': 18,
