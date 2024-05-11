@@ -21,8 +21,8 @@ print("Num CPUs Available: ", len(tf.config.list_physical_devices('CPU')))
 tf.keras.backend.clear_session()
 
 main_path = "/app/rundir/CPSC393/FinalProject/"
-batch_size = 32
-num_classes = 24
+batch_size = 64
+num_classes = 26
 latent_dim = 100
 
 train_df = pd.read_csv("./sign_mnist_train.csv")
@@ -117,7 +117,10 @@ class ConditionalGAN(keras.Model):
 
     def train_step(self, data):
         images, labels = data
-        batch_size = 32
+        batch_size = tf.shape(images)[0]  # Get the batch size dynamically
+
+        # Debugging batch sizes
+        print(f"Batch size: {batch_size}")
 
         random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
 
@@ -153,11 +156,11 @@ gan.compile(
     g_optimizer=keras.optimizers.Adam(0.0001)
 )
 
-# Ensure consistent batch size
-def ensure_batch_size(dataset, batch_size):
-    return dataset.map(lambda x, y: (x[:batch_size], y[:batch_size]))
+# Filter out batches that are smaller than the required batch size
+def filter_incomplete_batches(dataset, batch_size):
+    return dataset.filter(lambda x, y: tf.shape(x)[0] == batch_size)
 
-train_dataset = ensure_batch_size(train_dataset, batch_size)
+train_dataset = filter_incomplete_batches(train_dataset, batch_size)
 
 # Debugging the dataset before training
 for batch in train_dataset.take(1):
@@ -212,7 +215,9 @@ label_dict = {
     'u': 20,
     'v': 21,
     'w': 22,
-    'x': 23
+    'x': 23,
+    'y': 24,
+    'z': 25
 }
 
 # Generate and plot images for a word
