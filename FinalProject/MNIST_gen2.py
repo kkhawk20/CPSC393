@@ -166,8 +166,8 @@ discriminator = build_discriminator(num_classes)
 generator = build_generator_with_resnet(latent_dim, num_classes)
 gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim, num_classes=num_classes)
 gan.compile(
-    d_optimizer=keras.optimizers.Adam(0.0001),
-    g_optimizer=keras.optimizers.Adam(0.0004)
+    d_optimizer=keras.optimizers.Adam(0.00005),
+    g_optimizer=keras.optimizers.Adam(0.0001)
 )
 
 # Filter out batches that are smaller than the required batch size
@@ -181,7 +181,7 @@ train_dataset = filter_incomplete_batches(train_dataset, batch_size)
 #     print(f"Sample batch shapes - images: {batch[0].shape}, labels: {batch[1].shape}")
 
 # Train the GAN
-history = gan.fit(train_dataset, epochs=50)
+history = gan.fit(train_dataset, epochs=200)
 
 # Plotting the training losses
 def plot_training_losses(history, file_name="training_losses.png"):
