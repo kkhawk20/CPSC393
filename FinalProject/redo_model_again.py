@@ -296,7 +296,7 @@ def build_gan(hp):
     generator = build_generator(hp)
     discriminator = build_discriminator()
 
-    learning_rate = hp.Choice("learning_rate", [1e-2, 1e-3, 1e-4])
+    learning_rate = hp.Choice("learning_rate", [1e-3, 1e-4, 1e-5])
     batch_size = hp.Choice("batch_size", [2, 4, 8])
 
     gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
@@ -332,10 +332,14 @@ if retrain:
     # Also saving a plot showing the losses over epochs
     import matplotlib.pyplot as plt
 
+    try:
+        d_loss_history = [float(loss) for loss in best_model.d_loss_history]
+        g_loss_history = [float(loss) for loss in best_model.g_loss_history]
+
     # Plotting
     plt.figure(figsize=(10, 5))
-    plt.plot(best_model.d_loss_history, label='Discriminator Loss')
-    plt.plot(best_model.g_loss_history, label='Generator Loss')
+    plt.plot(d_loss_history, label='Discriminator Loss')
+    plt.plot(g_loss_history, label='Generator Loss')
     plt.title('Training Losses Over Epochs')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
