@@ -10,3 +10,7 @@
 * HW3 : Fruit Classification with CNN's and transfer learning
 
 * HW4 : Recurrent Neural Networks, next sentence generation with BERT(Tokenizer/NLP)
+
+* HW5 : Writeup on different versions of GAN models (VAE, C-GAN, etc. )
+
+* Final Project : Generation of ASL through Conditional GAN and LSTM Model
