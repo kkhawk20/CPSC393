@@ -17,4 +17,6 @@
   * https://keras.io/examples/generative/conditional_gan/
 
 * ChatGPT Usage Prompt :
-  * General debugging / brainstorming
+  * General brainstorming
+  * Help with understanding the model and creating the basic C-GAN model
+  * Help debugging literally everything that went wrong
