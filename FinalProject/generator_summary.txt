@@ -1,0 +1,88 @@
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input_1 (InputLayer)           [(None, 408)]        0           []                               
+                                                                                                  
+ input_2 (InputLayer)           [(None, 408)]        0           []                               
+                                                                                                  
+ concatenate (Concatenate)      (None, 816)          0           ['input_1[0][0]',                
+                                                                  'input_2[0][0]']                
+                                                                                                  
+ dense (Dense)                  (None, 4096)         3346432     ['concatenate[0][0]']            
+                                                                                                  
+ reshape (Reshape)              (None, 1, 4, 4, 256  0           ['dense[0][0]']                  
+                                )                                                                 
+                                                                                                  
+ conv_lstm2d (ConvLSTM2D)       (None, 1, 4, 4, 128  1769984     ['reshape[0][0]']                
+                                )                                                                 
+                                                                                                  
+ batch_normalization (BatchNorm  (None, 1, 4, 4, 128  512        ['conv_lstm2d[0][0]']            
+ alization)                     )                                                                 
+                                                                                                  
+ conv_lstm2d_1 (ConvLSTM2D)     (None, 1, 4, 4, 64)  442624      ['batch_normalization[0][0]']    
+                                                                                                  
+ batch_normalization_1 (BatchNo  (None, 1, 4, 4, 64)  256        ['conv_lstm2d_1[0][0]']          
+ rmalization)                                                                                     
+                                                                                                  
+ time_distributed (TimeDistribu  (None, 1, 16, 16, 6  102464     ['batch_normalization_1[0][0]']  
+ ted)                           4)                                                                
+                                                                                                  
+ time_distributed_1 (TimeDistri  (None, 1, 16, 16, 6  256        ['time_distributed[0][0]']       
+ buted)                         4)                                                                
+                                                                                                  
+ time_distributed_2 (TimeDistri  (None, 1, 32, 32, 1  204928     ['time_distributed_1[0][0]']     
+ buted)                         28)                                                               
+                                                                                                  
+ time_distributed_3 (TimeDistri  (None, 1, 32, 32, 1  512        ['time_distributed_2[0][0]']     
+ buted)                         28)                                                               
+                                                                                                  
+ time_distributed_4 (TimeDistri  (None, 1, 64, 64, 2  819456     ['time_distributed_3[0][0]']     
+ buted)                         56)                                                               
+                                                                                                  
+ time_distributed_5 (TimeDistri  (None, 1, 64, 64, 2  1024       ['time_distributed_4[0][0]']     
+ buted)                         56)                                                               
+                                                                                                  
+ time_distributed_6 (TimeDistri  (None, 1, 128, 128,  3277312    ['time_distributed_5[0][0]']     
+ buted)                          512)                                                             
+                                                                                                  
+ time_distributed_7 (TimeDistri  (None, 1, 128, 128,  2048       ['time_distributed_6[0][0]']     
+ buted)                          512)                                                             
+                                                                                                  
+ time_distributed_8 (TimeDistri  (None, 1, 256, 256,  38403      ['time_distributed_7[0][0]']     
+ buted)                          3)                                                               
+                                                                                                  
+ lambda (Lambda)                (None, 16, 256, 256  0           ['time_distributed_8[0][0]']     
+                                , 3)                                                              
+                                                                                                  
+==================================================================================================
+Total params: 10,006,211
+Trainable params: 10,003,907
+Non-trainable params: 2,304
+__________________________________________________________________________________________________
+None
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ time_distributed_9 (TimeDis  (None, 16, 128, 128, 64)  1792     
+ tributed)                                                       
+                                                                 
+ time_distributed_10 (TimeDi  (None, 16, 64, 64, 128)  73856     
+ stributed)                                                      
+                                                                 
+ time_distributed_11 (TimeDi  (None, 16, 524288)       0         
+ stributed)                                                      
+                                                                 
+ lstm (LSTM)                 (None, 128)               268501504 
+                                                                 
+ flatten_1 (Flatten)         (None, 128)               0         
+                                                                 
+ dense_1 (Dense)             (None, 1)                 129       
+                                                                 
+=================================================================
+Total params: 268,577,281
+Trainable params: 268,577,281
+Non-trainable params: 0
+_________________________________________________________________
+None
