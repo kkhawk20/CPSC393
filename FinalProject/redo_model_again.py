@@ -30,7 +30,6 @@ image_size = 256
 latent_dim = 408
 max_frames = 16
 
-
 # Load the JSON file
 with open(main_path + 'WLASL_v0.3.json', 'r') as data_file:
     json_data = json.load(data_file)
@@ -296,8 +295,8 @@ def build_gan(hp):
     generator = build_generator(hp)
     discriminator = build_discriminator()
 
-    learning_rate_d = hp.Choice("learning_rate", [1e-3, 1e-4, 1e-6])
-    learning_rate_g = hp.Choice("learning_rate", [1e-4, 1e-5, 1e-8])
+    learning_rate_g = hp.Choice("learning_rate_g", [1e-4, 1e-5, 5e-6])  # Further lowered for generator
+    learning_rate_d = hp.Choice("learning_rate_d", [1e-4, 5e-5, 1e-5])  # Lowered for discriminator
 
     batch_size = hp.Choice("batch_size", [2, 4, 8])
 
@@ -319,78 +318,106 @@ tuner = kt.Hyperband(
     overwrite=True
 )
 
+def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5), fileName = "generated_images.png"):
+    # Ensure the word is in the dictionary
+    if word not in label_dict:
+        print(f"Word '{word}' not found in label dictionary.")
+        return
+
+    word_label = label_dict[word]
+    num_classes = max(label_dict.values()) # Calculate correct number of classes
+
+    # Create random noise and one-hot labels
+    noise = tf.random.normal([num_images, latent_dim])
+    label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
+
+    # Validate shapes
+    print(f"Noise shape: {tf.shape(noise)}, Label shape: {tf.shape(label_one_hot)}")
+
+    # Generate images
+    inputs = [noise, label_one_hot]
+    images = generator.predict(inputs, batch_size=num_images)
+    images = (images * 255).astype(np.uint8)
+
+    images = images[0]  # Assuming only one batch and selecting the first video's frames
+
+    # Create a grid of images
+    fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
+    for img, ax in zip(images, axes.flatten()):
+        ax.imshow(img)
+        ax.axis('off')
+
+    plt.tight_layout()
+    plt.savefig(fileName)
+
 retrain = True
 
 if retrain:
 
+    class LossHistoryPlotter(tf.keras.callbacks.Callback):
+        def __init__(self):
+            super(LossHistoryPlotter, self).__init__()
+            self.d_losses = []
+            self.g_losses = []
+
+        def on_epoch_end(self, epoch, logs=None):
+            d_loss = logs.get('d_loss')
+            g_loss = logs.get('g_loss')
+            if d_loss is not None:
+                self.d_losses.append(d_loss)
+            if g_loss is not None:
+                self.g_losses.append(g_loss)
+
+            # Plot losses in a single plot
+            plt.figure(figsize=(10, 5))
+            plt.plot(self.d_losses, label='Discriminator Loss', color='blue')
+            plt.plot(self.g_losses, label='Generator Loss', color='red')
+            plt.title('Training Losses Over Epochs')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig('losses_over_epochs.png')
+            plt.close()
+    
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
-    tuner.search(dataset, epochs=20, callbacks=[stop_early])
+    loss_plotter = LossHistoryPlotter()
+    tuner.search(dataset, epochs=20, callbacks=[stop_early, loss_plotter])
+
     best_model = tuner.get_best_models(num_models=1)[0]
 
     best_model.generator.save_weights("generator_weights_tuned.h5")
     best_model.generator.save("generator_model_tuned.h5")
     best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
 
-    # Also saving a plot showing the losses over epochs
-    import matplotlib.pyplot as plt
+else:
+    print("Let's do some predictions!!")
+    # Build the generator model architecture
+    hp = kt.HyperParameters()
+    generator = build_generator(hp)
+    
+    # Load the saved weights into the generator model
+    generator.load_weights("generator_weights_tuned.h5")
 
-    try:
-        d_loss_history = [float(loss) for loss in best_model.d_loss_history]
-        g_loss_history = [float(loss) for loss in best_model.g_loss_history]
-    except AttributeError:
-        d_loss_history = [float(loss) for loss in best_model.d_loss_tracker.losses]
-        g_loss_history = [float(loss) for loss in best_model.g_loss_tracker.losses]
+    # Rebuild the ConditionalGAN model
+    discriminator = build_discriminator()
+    best_model = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
+    best_model.compile(
+        d_optimizer=keras.optimizers.Adam(learning_rate=1e-6),  # Example learning rate, adjust as needed
+        g_optimizer=keras.optimizers.Adam(learning_rate=1e-6),
+        d_loss_fn=discriminator_loss,
+        g_loss_fn=generator_loss
+    )
 
-    # Plotting
-    plt.figure(figsize=(10, 5))
-    plt.plot(d_loss_history, label='Discriminator Loss')
-    plt.plot(g_loss_history, label='Generator Loss')
-    plt.title('Training Losses Over Epochs')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig('losses_over_epochs.png')
+    # Check if loss histories are available
+    if not best_model.d_loss_history or not best_model.g_loss_history:
+        print("Warning: Loss histories are empty.")
 
-else :
-    print("Lets do some predictions!!")
+    if not best_model.d_loss_tracker.variables:
+        print("Warning: Loss tracker variables are empty.")
 
-    def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_images=10, grid_dim=(2, 5), fileName = "generated_images.png"):
-        # Ensure the word is in the dictionary
-        if word not in label_dict:
-            print(f"Word '{word}' not found in label dictionary.")
-            return
-
-        word_label = label_dict[word]
-        num_classes = max(label_dict.values()) # Calculate correct number of classes
-
-        # Create random noise and one-hot labels
-        noise = tf.random.normal([num_images, latent_dim])
-        label_one_hot = tf.one_hot([word_label] * num_images, depth=num_classes)
-
-        # Validate shapes
-        print(f"Noise shape: {tf.shape(noise)}, Label shape: {tf.shape(label_one_hot)}")
-
-        # Generate images
-        inputs = [noise, label_one_hot]
-        images = generator.predict(inputs, batch_size=num_images)
-        images = (images * 255).astype(np.uint8)
-
-        images = images[0]  # Assuming only one batch and selecting the first video's frames
-
-        # Create a grid of images
-        fig, axes = plt.subplots(grid_dim[0], grid_dim[1], figsize=(15, 10))
-        for img, ax in zip(images, axes.flatten()):
-            ax.imshow(img)
-            ax.axis('off')
-
-        plt.tight_layout()
-        plt.savefig(fileName)
-
-    # Load generator model
-    generator = load_model("generator_weights_tuned.h5", compile=False)
-
-word_list = ['tired', 'still']
-for word in word_list:
-    fileName = f"generated_images_tuned_{word}.png"
-    generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
-
+    word_list = ['tired', 'still']
+    for word in word_list:
+        fileName = f"generated_images_tuned_{word}.png"
+        generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
