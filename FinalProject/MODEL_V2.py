@@ -375,7 +375,7 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         plt.tight_layout()
         plt.savefig('losses_over_epochs.png')
         plt.close()
-        print("Plotted", epoch, "losses: ", d_loss, ", ",g_loss)
+        print("Plotted epoch", epoch, "losses: ", d_loss, ", ",g_loss)
 
 # CHange this to True to retrain the model weights, and False to just get predictions!
 retrain = True
@@ -413,10 +413,27 @@ else:
 
     # Check if loss histories are available
     if not best_model.d_loss_history or not best_model.g_loss_history:
-        print("Warning: Loss histories are empty.")
+        print("!!!!  Warning: Loss histories are empty. !!!!")
 
     if not best_model.d_loss_tracker.variables:
-        print("Warning: Loss tracker variables are empty.")
+        print("!!!! Warning: Loss tracker variables are empty. !!!!")
+
+       # Plotting loss history from the best model
+    if hasattr(best_model, 'd_loss_history') and hasattr(best_model, 'g_loss_history'):
+        d_loss_history = best_model.d_loss_history
+        g_loss_history = best_model.g_loss_history
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(d_loss_history, label='Discriminator Loss', color='blue')
+        plt.plot(g_loss_history, label='Generator Loss', color='red')
+        plt.title('Training Losses Over Epochs')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig('losses_over_epochs_best_model.png')
+        plt.close()
 
     word_list = ['tired', 'still']
     for word in word_list:
