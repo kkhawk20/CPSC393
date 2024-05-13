@@ -350,6 +350,7 @@ def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_im
     plt.tight_layout()
     plt.savefig(fileName)
 
+# CHange this to True to retrain the model weights, and False to just get predictions!
 retrain = True
 
 if retrain:
