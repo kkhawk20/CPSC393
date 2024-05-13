@@ -314,7 +314,7 @@ tuner = kt.Hyperband(
     build_gan,
     objective=kt.Objective("g_loss", direction="min"),
     max_epochs=30,
-    hyperband_iterations=2,
+    hyperband_iterations=5,
     overwrite=True
 )
 
@@ -376,17 +376,15 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         plt.tight_layout()
         plt.savefig('losses_over_epochs.png')
         plt.close()
-        
+
 # CHange this to True to retrain the model weights, and False to just get predictions!
 retrain = True
 
 if retrain:
 
-
-    
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     loss_plotter = LossHistoryPlotter()
-    tuner.search(dataset, epochs=20, callbacks=[stop_early, loss_plotter])
+    tuner.search(dataset, epochs=200, callbacks=[stop_early, loss_plotter])
 
     best_model = tuner.get_best_models(num_models=1)[0]
 
