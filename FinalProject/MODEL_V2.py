@@ -305,7 +305,6 @@ def build_gan(hp):
         d_loss_fn=discriminator_loss,
         g_loss_fn=generator_loss
     )
-
     return gan
 
 tuner = kt.Hyperband(
@@ -359,8 +358,10 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         g_loss = logs.get('g_loss')
         if d_loss is not None:
             self.d_losses.append(d_loss)
+            print(d_loss)
         if g_loss is not None:
             self.g_losses.append(g_loss)
+            print(g_loss)
 
         # Plot losses in a single plot
         plt.figure(figsize=(10, 5))
@@ -374,6 +375,7 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         plt.tight_layout()
         plt.savefig('losses_over_epochs.png')
         plt.close()
+        print("Plotted", epoch, "losses: ", d_loss, ", ",g_loss)
 
 # CHange this to True to retrain the model weights, and False to just get predictions!
 retrain = True
