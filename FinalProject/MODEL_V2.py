@@ -358,10 +358,10 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         g_loss = logs.get('g_loss')
         if d_loss is not None:
             self.d_losses.append(d_loss)
-            print(d_loss)
+            print(f"Epoch {epoch}: Discriminator Loss = {d_loss}")
         if g_loss is not None:
             self.g_losses.append(g_loss)
-            print(g_loss)
+            print(f"Epoch {epoch}: Generator Loss = {g_loss}")
 
         # Plot losses in a single plot
         plt.figure(figsize=(10, 5))
@@ -377,48 +377,54 @@ class LossHistoryPlotter(tf.keras.callbacks.Callback):
         plt.close()
         print("Plotted epoch", epoch, "losses: ", d_loss, ", ",g_loss)
 
-# CHange this to True to retrain the model weights, and False to just get predictions!
+# Change this to True to retrain the model weights, and False to just get predictions!
 retrain = True
 
 if retrain:
 
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     loss_plotter = LossHistoryPlotter()
-    tuner.search(dataset, epochs=200, callbacks=[stop_early, loss_plotter])
+    checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
+        filepath="model_checkpoint.h5",
+        save_weights_only=False,
+        save_best_only=True,
+        monitor='g_loss',
+        mode='min',
+        verbose=1
+    )
+
+    tuner.search(dataset, epochs=200, 
+                 callbacks=[stop_early, loss_plotter, checkpoint_cb])
 
     best_model = tuner.get_best_models(num_models=1)[0]
 
     best_model.generator.save_weights("generator_weights_tuned.h5")
-    best_model.generator.save("generator_model_tuned.h5")
+    best_model.save("model_tuned.h5")
     best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
 
 else:
     print("Let's do some predictions!!")
-    # Build the generator model architecture
-    hp = kt.HyperParameters()
-    generator = build_generator(hp)
+    # # # Build the generator model architecture
+    # hp = kt.HyperParameters()
+    # generator = build_generator(hp)
     
-    # Load the saved weights into the generator model
-    generator.load_weights("generator_weights_tuned.h5")
+    # # Load the saved weights into the generator model
+    # generator.load_weights("generator_weights_tuned.h5")
 
-    # Rebuild the ConditionalGAN model
-    discriminator = build_discriminator()
-    best_model = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
-    best_model.compile(
-        d_optimizer=keras.optimizers.Adam(learning_rate=1e-6), 
-        g_optimizer=keras.optimizers.Adam(learning_rate=1e-4),
-        d_loss_fn=discriminator_loss,
-        g_loss_fn=generator_loss
-    )
+    # # Rebuild the ConditionalGAN model
+    # discriminator = build_discriminator()
+    # discriminator.load_weights("discriminator_weights_tuned.h5")
+    # best_model = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
+    # best_model.compile(
+    #     d_optimizer=keras.optimizers.Adam(learning_rate=1e-6), 
+    #     g_optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+    #     d_loss_fn=discriminator_loss,
+    #     g_loss_fn=generator_loss
+    # )
 
-    # Check if loss histories are available
-    if not best_model.d_loss_history or not best_model.g_loss_history:
-        print("!!!!  Warning: Loss histories are empty. !!!!")
+    best_model = load_model("model_tuned.h5")
 
-    if not best_model.d_loss_tracker.variables:
-        print("!!!! Warning: Loss tracker variables are empty. !!!!")
-
-       # Plotting loss history from the best model
+    # Plotting loss history from the best model
     if hasattr(best_model, 'd_loss_history') and hasattr(best_model, 'g_loss_history'):
         d_loss_history = best_model.d_loss_history
         g_loss_history = best_model.g_loss_history
@@ -435,7 +441,8 @@ else:
         plt.savefig('losses_over_epochs_best_model.png')
         plt.close()
 
+  
     word_list = ['tired', 'still']
     for word in word_list:
         fileName = f"generated_images_tuned_{word}.png"
-        generate_and_plot_images(generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
+        generate_and_plot_images(best_model.generator, word, label_dict, latent_dim=latent_dim, num_images=10, grid_dim=(2, 5), fileName=fileName)
