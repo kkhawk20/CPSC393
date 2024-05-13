@@ -350,37 +350,39 @@ def generate_and_plot_images(generator, word, label_dict, latent_dim=100, num_im
     plt.tight_layout()
     plt.savefig(fileName)
 
+class LossHistoryPlotter(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super(LossHistoryPlotter, self).__init__()
+        self.d_losses = []
+        self.g_losses = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        d_loss = logs.get('d_loss')
+        g_loss = logs.get('g_loss')
+        if d_loss is not None:
+            self.d_losses.append(d_loss)
+        if g_loss is not None:
+            self.g_losses.append(g_loss)
+
+        # Plot losses in a single plot
+        plt.figure(figsize=(10, 5))
+        plt.plot(self.d_losses, label='Discriminator Loss', color='blue')
+        plt.plot(self.g_losses, label='Generator Loss', color='red')
+        plt.title('Training Losses Over Epochs')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig('losses_over_epochs.png')
+        plt.close()
+        
 # CHange this to True to retrain the model weights, and False to just get predictions!
 retrain = True
 
 if retrain:
 
-    class LossHistoryPlotter(tf.keras.callbacks.Callback):
-        def __init__(self):
-            super(LossHistoryPlotter, self).__init__()
-            self.d_losses = []
-            self.g_losses = []
 
-        def on_epoch_end(self, epoch, logs=None):
-            d_loss = logs.get('d_loss')
-            g_loss = logs.get('g_loss')
-            if d_loss is not None:
-                self.d_losses.append(d_loss)
-            if g_loss is not None:
-                self.g_losses.append(g_loss)
-
-            # Plot losses in a single plot
-            plt.figure(figsize=(10, 5))
-            plt.plot(self.d_losses, label='Discriminator Loss', color='blue')
-            plt.plot(self.g_losses, label='Generator Loss', color='red')
-            plt.title('Training Losses Over Epochs')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig('losses_over_epochs.png')
-            plt.close()
     
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     loss_plotter = LossHistoryPlotter()
