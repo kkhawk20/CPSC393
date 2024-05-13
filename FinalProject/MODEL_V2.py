@@ -1,3 +1,4 @@
+from contextlib import redirect_stdout
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import ConvLSTM2D, BatchNormalization, Conv2DTranspose, TimeDistributed, Conv2D, Flatten, Dense, LSTM
@@ -215,6 +216,9 @@ class ConditionalGAN(keras.Model):
         self.d_loss_history = []
         self.g_loss_history = []
 
+        self.generator.build(input_shape = (None, latent_dim))
+        self.discriminator.build(input_shape = (None, 16, 256, 256, 3))
+
     def call(self, inputs, training=False):
         # inputs should be a list with two elements: [noise_input, label_input]
         if isinstance(inputs, list) and len(inputs) == 2:
@@ -232,6 +236,13 @@ class ConditionalGAN(keras.Model):
             return real_outputs, fake_outputs
         else:
             return generated_videos
+        
+    def get_config(self):
+        return {"discriminator": self.discriminator, "generator": self.generator, "latent_dim": self.latent_dim}
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
     def compile(self, d_optimizer, g_optimizer, d_loss_fn, g_loss_fn):
@@ -305,6 +316,22 @@ def build_gan(hp):
         d_loss_fn=discriminator_loss,
         g_loss_fn=generator_loss
     )
+
+    # Dummy input to run through the model to ensure it's properly built
+    noise = tf.random.normal([1, latent_dim])
+    dummy_label_input = tf.keras.utils.to_categorical([0], num_classes=num_classes)
+    gan([noise, dummy_label_input], training=False)
+
+    # Print the model summary if needed
+    # Save both model architecture .summary to a file 
+    with open('generator_summary.txt', 'w') as f:
+        with redirect_stdout(f):
+            print(gan.generator.summary())
+            print(gan.discriminator.summary())
+        
+    print(gan.generator.summary())
+    print(gan.discriminator.summary())
+
     return gan
 
 tuner = kt.Hyperband(
@@ -394,13 +421,35 @@ if retrain:
         save_format = 'tf'
     )
 
-    tuner.search(dataset, epochs=200, 
+    tuner.search(dataset, epochs=20, 
                  callbacks=[stop_early, loss_plotter, checkpoint_cb])
 
     best_model = tuner.get_best_models(num_models=1)[0]
 
-    best_model.generator.save_weights("generator_weights_tuned.h5")
+    best_hyperparameters = tuner.get_best_hyperparameters(num_trials=1)[0]
+    best_learning_rate_g = best_hyperparameters.get('learning_rate_g')
+    best_learning_rate_d = best_hyperparameters.get('learning_rate_d')
+    print(f"Best hyperparameters: {best_hyperparameters}")
+    print(f"Best Generator Learning Rate: {best_learning_rate_g}")
+    print(f"Best Discriminator Learning Rate: {best_learning_rate_d}")
+
+    # Saving it to the generator_model.txt file appending to the end
+    with open('generator_model.txt', 'a') as f:
+        with redirect_stdout(f):
+            print(f"Best hyperparameters: {best_hyperparameters}")
+            print(f"Best Generator Learning Rate: {best_learning_rate_g}")
+            print(f"Best Discriminator Learning Rate: {best_learning_rate_d}")
+            
+    # Fitting the best model for further eval
+    best_model.fit(dataset, epochs=500, callbacks=[loss_plotter, 
+                                                   stop_early, 
+                                                   checkpoint_cb])
+
+    # Saving whole model
     best_model.save("model_tuned", save_format = 'tf')
+
+    # Saving individual weights
+    best_model.generator.save_weights("generator_weights_tuned.h5")
     best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
 
 else:
