@@ -295,10 +295,8 @@ def build_gan(hp):
     generator = build_generator(hp)
     discriminator = build_discriminator()
 
-    learning_rate_g = hp.Choice("learning_rate_g", [1e-4, 1e-5, 5e-6])  # Further lowered for generator
-    learning_rate_d = hp.Choice("learning_rate_d", [1e-4, 5e-5, 1e-5])  # Lowered for discriminator
-
-    batch_size = hp.Choice("batch_size", [2, 4, 8])
+    learning_rate_g = hp.Choice("learning_rate_g", [1e-2, 1e-3, 5e-4, 5e-5])  # Further lowered for generator
+    learning_rate_d = hp.Choice("learning_rate_d", [1e-4, 5e-5, 5e-6, 5e-7])  # Lowered for discriminator
 
     gan = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
     gan.compile(
@@ -405,8 +403,8 @@ else:
     discriminator = build_discriminator()
     best_model = ConditionalGAN(discriminator=discriminator, generator=generator, latent_dim=latent_dim)
     best_model.compile(
-        d_optimizer=keras.optimizers.Adam(learning_rate=1e-6),  # Example learning rate, adjust as needed
-        g_optimizer=keras.optimizers.Adam(learning_rate=1e-6),
+        d_optimizer=keras.optimizers.Adam(learning_rate=1e-6), 
+        g_optimizer=keras.optimizers.Adam(learning_rate=1e-4),
         d_loss_fn=discriminator_loss,
         g_loss_fn=generator_loss
     )
