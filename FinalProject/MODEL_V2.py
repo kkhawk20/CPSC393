@@ -385,12 +385,13 @@ if retrain:
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='g_loss', patience=20)
     loss_plotter = LossHistoryPlotter()
     checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
-        filepath="model_checkpoint.h5",
+        filepath="model_checkpoint",
         save_weights_only=False,
         save_best_only=True,
         monitor='g_loss',
         mode='min',
-        verbose=1
+        verbose=1,
+        save_format = 'tf'
     )
 
     tuner.search(dataset, epochs=200, 
@@ -399,7 +400,7 @@ if retrain:
     best_model = tuner.get_best_models(num_models=1)[0]
 
     best_model.generator.save_weights("generator_weights_tuned.h5")
-    best_model.save("model_tuned.h5")
+    best_model.save("model_tuned", save_format = 'tf')
     best_model.discriminator.save_weights("discriminator_weights_tuned.h5")
 
 else:
@@ -422,7 +423,13 @@ else:
     #     g_loss_fn=generator_loss
     # )
 
-    best_model = load_model("model_tuned.h5")
+    # Load the complete model from checkpoint if available
+    if os.path.exists("model_checkpoint.h5"):
+        best_model = tf.keras.models.load_model("model_checkpoint")
+        print("Loaded model from checkpoint.")
+    else:
+        best_model = tf.keras.models.load_model("model_tuned")
+        print("Loaded model from final saved model.")
 
     # Plotting loss history from the best model
     if hasattr(best_model, 'd_loss_history') and hasattr(best_model, 'g_loss_history'):
@@ -441,7 +448,6 @@ else:
         plt.savefig('losses_over_epochs_best_model.png')
         plt.close()
 
-  
     word_list = ['tired', 'still']
     for word in word_list:
         fileName = f"generated_images_tuned_{word}.png"
